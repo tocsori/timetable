@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관리자 페이지 - 시간표 시스템</title>
+    <style>
+        :root { --accent: #4a90e2; }
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; color: #333; line-height: 1.5; }
+        .section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 30px; max-width: 800px; margin-left: auto; margin-right: auto; }
+        .btn { padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 5px; }
+        .btn:hover { opacity: 0.8; }
+        .btn-danger { background: #dc3545; }
+        .btn-success { background: #28a745; }
+        input, select { border: 1px solid #ddd; border-radius: 4px; padding: 8px; font-family: inherit; font-size: 14px; margin: 5px; }
+        .nav-buttons { text-align: right; margin-bottom: 20px; }
+        .info-box { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid var(--accent); }
+        .warning-box { background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107; }
+        .preference-settings { margin-top: 5px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        .preference-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+        .preference-item select { width: 200px; }
+        .preference-item strong { min-width: 60px; }
+    </style>
+</head>
+<body>
+
+<div class="nav-buttons">
+    <button class="btn" onclick="history.back()">이전 페이지로 돌아가기</button>
+</div>
+
+<div class="section">
+    <h2>⚙️ 관리자 설정</h2>
+    
+    <div class="info-box">
+        <h3>학급 수 설정</h3>
+        <p>시간표 시스템에서 사용할 학급 수를 설정합니다. 학급 수를 변경하면 해당하는 모든 학급의 시간표가 초기화됩니다.</p>
+        <div style="margin-top: 15px;">
+            <label><strong>학급 수(n):</strong></label>
+            <input type="number" id="classCount" value="3" min="1" max="20" style="width:80px">
+            <button class="btn btn-success" onclick="updateClassCount()">학급 수 변경</button>
+        </div>
+    </div>
+    
+    <div class="info-box">
+        <h3>교시 수 설정</h3>
+        <p>시간표에서 사용할 교시 수를 설정합니다. 교시 수를 변경하면 모든 시간표가 재구성됩니다.</p>
+        <div style="margin-top: 15px;">
+            <label><strong>교시 수:</strong></label>
+            <input type="number" id="periodCount" value="7" min="1" max="10" style="width:80px">
+            <button class="btn btn-success" onclick="updatePeriodCount()">교시 수 변경</button>
+        </div>
+    </div>
+    
+    <div class="warning-box">
+        <h3>⚠️ 주의사항</h3>
+        <ul>
+            <li>학급 수를 줄이면 삭제된 학급의 데이터는 복구할 수 없습니다.</li>
+            <li>학급 수를 늘리면 새 학급의 시간표는 비어있는 상태로 생성됩니다.</li>
+            <li>변경 사항은 즉시 저장되며, 메인 페이지에서 확인할 수 있습니다.</li>
+        </ul>
+    </div>
+    
+    <div class="info-box">
+        <h3>📌 과목별 선호교시 설정</h3>
+        <p>각 과목의 선호하는 교시를 설정할 수 있습니다. 자동 채우기 기능 사용 시 이 설정을 우선적으로 고려합니다.</p>
+        <div class="preference-settings">
+            <div id="preferenceContainer"></div>
+        </div>
+    </div>
+    
+    <div class="info-box">
+        <h3>데이터 관리</h3>
+        <p>전체 데이터를 초기화하거나 백업할 수 있습니다.</p>
+        <div style="margin-top: 15px;">
+            <button class="btn btn-danger" onclick="resetAllData()">전체 데이터 초기화</button>
+            <button class="btn" onclick="exportAllData()">전체 데이터 백업</button>
+            <button class="btn" onclick="document.getElementById('backupInput').click()">백업 불러오기</button>
+            <input type="file" id="backupInput" accept=".json" onchange="importBackup(event)" style="display:none">
+        </div>
+    </div>
+</div>
+
+<script>
+const allSubjects = ["국어", "사회", "도덕", "수학", "과학", "실과", "체육", "음악", "미술", "영어", "창체(자)", "창체(동)", "창체(봉)", "창체(진)"];
+
+function init() {
+    // 로그인 체크
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    // 서버에서 데이터 불러오기
+    loadDataFromServer();
+}
+
+// 서버에서 데이터 불러오기
+function loadDataFromServer() {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.success && result.data) {
+                const state = result.data;
+                document.getElementById('classCount').value = state.classCount || 3;
+                document.getElementById('periodCount').value = state.periodCount || 7;
+            } else {
+                document.getElementById('classCount').value = 3;
+                document.getElementById('periodCount').value = 7;
+            }
+            renderPreferences();
+        })
+        .catch(error => {
+            console.error('데이터 불러오기 오류:', error);
+            document.getElementById('classCount').value = 3;
+            document.getElementById('periodCount').value = 7;
+            renderPreferences();
+        });
+}
+
+// 서버에 데이터 저장
+function saveDataToServer(state) {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    return fetch(`${window.location.origin}/api/data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            nickname: nickname,
+            state: state
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (!result.success) {
+            throw new Error(result.message || '저장 실패');
+        }
+        return result;
+    });
+}
+
+function updatePeriodCount() {
+    const newCount = parseInt(document.getElementById('periodCount').value);
+    if (isNaN(newCount) || newCount < 1 || newCount > 10) {
+        alert('올바른 교시 수를 입력해주세요. (1-10)');
+        return;
+    }
+    
+    if (!confirm(`교시 수를 ${newCount}개로 변경하시겠습니까?\n기존 데이터가 영향을 받을 수 있습니다.`)) {
+        return;
+    }
+    
+    // 서버에서 데이터 불러오기
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let state;
+            if (result.success && result.data) {
+                state = result.data;
+            } else {
+                state = {
+                    classCount: 3,
+                    periodCount: 7,
+                    subjectSheets: [],
+                    classData: {},
+                    preferences: {},
+                    currentWeek: new Date().toISOString(),
+                    annualHours: {},
+                    weeklyData: {}
+                };
+            }
+            
+            const oldCount = state.periodCount || 7;
+            state.periodCount = newCount;
+            
+            // 교시 수가 줄어든 경우 해당 교시 데이터 삭제
+            if (newCount < oldCount) {
+                // 고정 시트의 규칙에서 삭제된 교시 제거
+                if (state.subjectSheets) {
+                    state.subjectSheets.forEach(sheet => {
+                        const newRules = {};
+                        Object.keys(sheet.rules || {}).forEach(key => {
+                            const [r, c] = key.split('-').map(Number);
+                            if (r < newCount) {
+                                newRules[key] = sheet.rules[key];
+                            }
+                        });
+                        sheet.rules = newRules;
+                    });
+                }
+                
+                // 학급별 시간표에서 삭제된 교시 제거
+                Object.keys(state.classData || {}).forEach(classNum => {
+                    const data = state.classData[classNum];
+                    if (data.timetable) {
+                        data.timetable = data.timetable.slice(0, newCount);
+                    }
+                });
+            } else {
+                // 교시 수가 늘어난 경우 새 교시 추가
+                Object.keys(state.classData || {}).forEach(classNum => {
+                    const data = state.classData[classNum];
+                    if (!data.timetable) {
+                        data.timetable = [];
+                    }
+                    while (data.timetable.length < newCount) {
+                        data.timetable.push(Array(5).fill(""));
+                    }
+                });
+            }
+            
+            // 서버에 저장
+            return saveDataToServer(state);
+        })
+        .then(() => {
+            alert(`교시 수가 ${newCount}개로 변경되었습니다.`);
+            setTimeout(() => {
+                if (confirm('메인 페이지로 이동하시겠습니까?')) {
+                    history.back();
+                }
+            }, 500);
+        })
+        .catch(error => {
+            console.error('오류:', error);
+            alert('교시 수 변경 중 오류가 발생했습니다: ' + error.message);
+        });
+}
+
+// 선호교시 설정 렌더링
+function renderPreferences() {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let preferences = {};
+            let periodCount = 7;
+            
+            if (result.success && result.data) {
+                preferences = result.data.preferences || {};
+                periodCount = result.data.periodCount || 7;
+            }
+            
+            const container = document.getElementById('preferenceContainer');
+            container.innerHTML = '';
+            
+            allSubjects.forEach(sub => {
+                if (!preferences[sub]) preferences[sub] = [];
+                const div = document.createElement('div');
+                div.className = 'preference-item';
+                div.innerHTML = `
+                    <strong>${sub}:</strong>
+                    <select multiple size="3" id="pref-${sub}" onchange="updatePreference('${sub}')" style="width:200px;">
+                        ${Array.from({length: periodCount}, (_, i) => i + 1).map(h => 
+                            `<option value="${h}" ${preferences[sub].includes(h) ? 'selected' : ''}>${h}교시</option>`
+                        ).join('')}
+                    </select>
+                    <small>(Ctrl+클릭으로 다중 선택)</small>
+                `;
+                container.appendChild(div);
+            });
+        })
+        .catch(error => {
+            console.error('선호교시 설정 불러오기 오류:', error);
+            // 기본값으로 렌더링
+            const container = document.getElementById('preferenceContainer');
+            container.innerHTML = '';
+            allSubjects.forEach(sub => {
+                const div = document.createElement('div');
+                div.className = 'preference-item';
+                div.innerHTML = `
+                    <strong>${sub}:</strong>
+                    <select multiple size="3" id="pref-${sub}" onchange="updatePreference('${sub}')" style="width:200px;">
+                        ${Array.from({length: 7}, (_, i) => i + 1).map(h => 
+                            `<option value="${h}">${h}교시</option>`
+                        ).join('')}
+                    </select>
+                    <small>(Ctrl+클릭으로 다중 선택)</small>
+                `;
+                container.appendChild(div);
+            });
+        });
+}
+
+function updatePreference(subject) {
+    const select = document.getElementById(`pref-${subject}`);
+    const selected = Array.from(select.selectedOptions).map(opt => parseInt(opt.value));
+    
+    // 서버에서 데이터 불러오기
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let state;
+            if (result.success && result.data) {
+                state = result.data;
+            } else {
+                state = {
+                    classCount: 3,
+                    periodCount: 7,
+                    subjectSheets: [],
+                    classData: {},
+                    preferences: {},
+                    currentWeek: new Date().toISOString(),
+                    annualHours: {},
+                    weeklyData: {}
+                };
+            }
+            
+            if (!state.preferences) state.preferences = {};
+            state.preferences[subject] = selected;
+            
+            // 서버에 저장
+            return saveDataToServer(state);
+        })
+        .catch(error => {
+            console.error('선호교시 저장 오류:', error);
+            alert('선호교시 저장 중 오류가 발생했습니다.');
+        });
+}
+
+function updateClassCount() {
+    const newCount = parseInt(document.getElementById('classCount').value);
+    if (isNaN(newCount) || newCount < 1) {
+        alert('올바른 학급 수를 입력해주세요.');
+        return;
+    }
+    
+    if (!confirm(`학급 수를 ${newCount}개로 변경하시겠습니까?\n기존 데이터가 영향을 받을 수 있습니다.`)) {
+        return;
+    }
+    
+    // 서버에서 데이터 불러오기
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let state;
+            if (result.success && result.data) {
+                state = result.data;
+            } else {
+                state = {
+                    classCount: 3,
+                    periodCount: 7,
+                    subjectSheets: [],
+                    classData: {},
+                    preferences: {},
+                    currentWeek: new Date().toISOString(),
+                    annualHours: {},
+                    weeklyData: {}
+                };
+            }
+            
+            const oldCount = state.classCount || 3;
+            const periodCount = state.periodCount || 7;
+            
+            // 학급 수 변경
+            state.classCount = newCount;
+            
+            // 학급 데이터 초기화
+            if (!state.classData) state.classData = {};
+            
+            // 학급 수가 줄어든 경우 해당 학급 데이터 삭제
+            if (newCount < oldCount) {
+                for (let i = newCount + 1; i <= oldCount; i++) {
+                    if (state.classData[i]) {
+                        delete state.classData[i];
+                    }
+                }
+            }
+            
+            // 학급 수가 늘어난 경우 새 학급 데이터 초기화
+            if (newCount > oldCount) {
+                const allSubjects = ["국어", "사회", "도덕", "수학", "과학", "실과", "체육", "음악", "미술", "영어", "창체(자)", "창체(동)", "창체(봉)", "창체(진)"];
+                for (let i = oldCount + 1; i <= newCount; i++) {
+                    if (!state.classData[i]) {
+                        state.classData[i] = { 
+                            timetable: Array(periodCount).fill().map(() => Array(5).fill("")), 
+                            targetHours: Array(allSubjects.length).fill(0),
+                            memo: ""
+                        };
+                    }
+                }
+            }
+            
+            // 서버에 저장
+            return saveDataToServer(state);
+        })
+        .then(() => {
+            alert(`학급 수가 ${newCount}개로 변경되었습니다.`);
+            
+            // 메인 페이지로 이동
+            setTimeout(() => {
+                if (confirm('메인 페이지로 이동하시겠습니까?')) {
+                    history.back();
+                }
+            }, 500);
+        })
+        .catch(error => {
+            console.error('오류:', error);
+            alert('학급 수 변경 중 오류가 발생했습니다: ' + error.message);
+        });
+}
+
+function resetAllData() {
+    if (!confirm('정말로 모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+        return;
+    }
+    
+    if (!confirm('마지막 확인입니다. 모든 데이터가 삭제됩니다.')) {
+        return;
+    }
+    
+    localStorage.removeItem('school_v5_final');
+    alert('모든 데이터가 초기화되었습니다.');
+    init();
+}
+
+function exportAllData() {
+    const data = localStorage.getItem('school_v5_final');
+    if (!data) {
+        alert('저장된 데이터가 없습니다.');
+        return;
+    }
+    
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `시간표_백업_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    alert('백업 파일이 다운로드되었습니다.');
+}
+
+function importBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (!confirm('백업 파일을 불러오면 현재 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = e.target.result;
+            JSON.parse(data); // 유효성 검사
+            localStorage.setItem('school_v5_final', data);
+            alert('백업 파일을 성공적으로 불러왔습니다.');
+            init();
+        } catch (err) {
+            alert('백업 파일을 불러오는 중 오류가 발생했습니다: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+init();
+</script>
+
+</body>
+</html>

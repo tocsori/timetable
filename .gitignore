@@ -1,0 +1,23 @@
+# 계정 정보 파일 (보안상 git에 포함하지 않음)
+accounts.json
+
+# 사용자 데이터 파일 (보안상 git에 포함하지 않음)
+data/
+*.json
+!annualTableData1.json
+!annualTableData2.json
+!package.json
+
+# Node modules
+node_modules/
+
+# 로그 파일
+*.log
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# IDE 설정
+.vscode/
+.idea/

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>로그인 - 시간표 시스템</title>
+    <style>
+        :root { --accent: #4a90e2; }
+        body { 
+            font-family: 'Malgun Gothic', sans-serif; 
+            padding: 0; 
+            margin: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #856404;
+        }
+        .warning-box strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #856404;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .button-group .btn {
+            flex: 1;
+        }
+        #createAccountForm {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>시간표 시스템</h1>
+        
+        <!-- 로그인 폼 -->
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="loginNickname">닉네임</label>
+                <input type="text" id="loginNickname" required placeholder="닉네임을 입력하세요">
+            </div>
+            
+            <div class="form-group">
+                <label for="loginPassword">비밀번호</label>
+                <input type="password" id="loginPassword" required placeholder="비밀번호를 입력하세요">
+            </div>
+            
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="showCreateAccount()">계정 만들기</button>
+                <button type="submit" class="btn">로그인</button>
+            </div>
+        </form>
+        
+        <!-- 계정 만들기 폼 -->
+        <form id="createAccountForm" onsubmit="handleCreateAccount(event)">
+            <div class="warning-box">
+                <strong>⚠️ 주의사항</strong>
+                본 사이트는 테스트용으로 비밀번호는 암호화되지 않으니 중요한 사이트와 동일하게 사용하지 마세요.
+            </div>
+            
+            <div class="form-group">
+                <label for="schoolName">학교 이름</label>
+                <input type="text" id="schoolName" required placeholder="예: 서울초등학교">
+            </div>
+            
+            <div class="form-group">
+                <label for="grade">학년</label>
+                <input type="number" id="grade" min="1" max="6" required placeholder="1~6">
+            </div>
+            
+            <div class="form-group">
+                <label for="createNickname">닉네임</label>
+                <input type="text" id="createNickname" required placeholder="닉네임을 입력하세요">
+            </div>
+            
+            <div class="form-group">
+                <label for="createPassword">비밀번호</label>
+                <input type="password" id="createPassword" required placeholder="비밀번호를 입력하세요">
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPassword">비밀번호 확인</label>
+                <input type="password" id="confirmPassword" required placeholder="비밀번호를 다시 입력하세요">
+            </div>
+            
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="showLogin()">로그인으로</button>
+                <button type="submit" class="btn btn-success">계정 만들기</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // 서버 API를 사용하여 계정 관리
+        const API_BASE = window.location.origin;
+        
+        function showCreateAccount() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('createAccountForm').style.display = 'block';
+        }
+        
+        function showLogin() {
+            document.getElementById('createAccountForm').style.display = 'none';
+            document.getElementById('loginForm').style.display = 'block';
+        }
+        
+        function handleCreateAccount(event) {
+            event.preventDefault();
+            
+            const schoolName = document.getElementById('schoolName').value.trim();
+            const grade = document.getElementById('grade').value;
+            const nickname = document.getElementById('createNickname').value.trim();
+            const password = document.getElementById('createPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!schoolName || !grade || !nickname || !password || !confirmPassword) {
+                alert('모든 항목을 입력해주세요.');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                alert('비밀번호가 일치하지 않습니다. 다시 확인해주세요.');
+                document.getElementById('confirmPassword').focus();
+                return;
+            }
+            
+            // 서버에 계정 생성 요청
+            fetch(`${API_BASE}/api/accounts/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    schoolName: schoolName,
+                    grade: parseInt(grade),
+                    nickname: nickname,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('계정이 생성되었습니다. 로그인해주세요.');
+                    showLogin();
+                    
+                    // 폼 초기화
+                    document.getElementById('schoolName').value = '';
+                    document.getElementById('grade').value = '';
+                    document.getElementById('createNickname').value = '';
+                    document.getElementById('createPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    alert(data.message || '계정 생성에 실패했습니다.');
+                }
+            })
+            .catch(error => {
+                console.error('오류:', error);
+                alert('서버 연결 오류가 발생했습니다. 서버가 실행 중인지 확인하세요.');
+            });
+        }
+        
+        function handleLogin(event) {
+            event.preventDefault();
+            
+            const nickname = document.getElementById('loginNickname').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!nickname || !password) {
+                alert('닉네임과 비밀번호를 입력해주세요.');
+                return;
+            }
+            
+            // 서버에 로그인 요청
+            fetch(`${API_BASE}/api/accounts/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    nickname: nickname,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.account) {
+                    // 로그인 정보를 localStorage에 저장 (세션 관리용)
+                    localStorage.setItem('timetable_login', JSON.stringify(data.account));
+                    
+                    alert(`${data.account.nickname}님 환영합니다. 현재 테스트 운영중입니다.`);
+                    window.location.href = 'main1.html';
+                } else {
+                    alert(data.message || '로그인에 실패했습니다.');
+                }
+            })
+            .catch(error => {
+                console.error('오류:', error);
+                alert('서버 연결 오류가 발생했습니다. 서버가 실행 중인지 확인하세요.');
+            });
+        }
+    </script>
+</body>
+</html

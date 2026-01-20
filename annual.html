@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>연간시수표 - 시간표 시스템</title>
+    <style>
+        :root { --accent: #4a90e2; }
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; color: #333; line-height: 1.5; }
+        .section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 30px; width: fit-content; margin-left: auto; margin-right: auto; }
+        .btn { padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 5px; }
+        .btn:hover { opacity: 0.8; }
+        .btn-success { background: #28a745; }
+        .nav-buttons { text-align: right; margin-bottom: 20px; }
+        .info-box { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid var(--accent); }
+        table { width: auto; border-collapse: collapse; margin: 15px 0; }
+        th, td { border: 1px solid #ced4da; padding: 5px 8px; text-align: center; font-size: 12px; }
+        th { background: #eee; font-weight: bold; }
+        input { border: 1px solid #ddd; border-radius: 4px; padding: 3px; font-family: inherit; font-size: 11px; width: 60px; text-align: center; }
+        select { border: 1px solid #ddd; border-radius: 4px; padding: 5px; font-family: inherit; font-size: 14px; margin: 5px; }
+        .subject-row { background: #f8f9fa; }
+        #annualHoursTable { width: fit-content; }
+        .file-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .btn-delete { background: #dc3545; font-size: 11px; padding: 3px 8px; }
+        .btn-delete:hover { opacity: 0.8; }
+        .total-row { background: #fff3cd; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="nav-buttons">
+    <button class="btn" onclick="history.back()">이전 페이지로 돌아가기</button>
+</div>
+<!-- 불러온 파일 보여주기 -->
+<div id="tableArea"></div>
+<!-- 불러온 파일 투명화 -->
+<style>
+    #tableArea {
+      display: none;
+    }
+  </style>
+  
+<div class="section">
+    <h2>📋 연간시수표</h2>
+    
+    <div class="info-box">
+        <p>이지 에듀의 시수표를 복사해 넣은 CSV 파일을 불러오면 연간시수표가 자동으로 채워집니다. 예시파일을 다운받아 사용하세요. 또는 직접 입력할 수도 있습니다. 계의 값은 새로고침해야 적용됩니다.</p>
+        <div class="file-controls">
+            <button class="btn" onclick="downloadExampleFile()" style="background: #17a2b8;">예시파일</button>
+            <button class="btn" onclick="document.getElementById('csvFile').click()" style="background: var(--accent);">파일선택</button>
+            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+            <select id="semesterSelect" onchange="switchSemester()">
+                <option value="1">1학기</option>
+                <option value="2">2학기</option>
+            </select>
+        </div>
+    </div>
+    
+    <table id="annualHoursTable">
+        <thead>
+            <tr id="annualHeaderRow">
+                <th>주</th>
+                <th>기간</th>
+                <th>수업일수</th>
+                <th>국어</th>
+                <th>사회</th>
+                <th>도덕</th>
+                <th>수학</th>
+                <th>과학</th>
+                <th>실과</th>
+                <th>체육</th>
+                <th>음악</th>
+                <th>미술</th>
+                <th>영어</th>
+                <th>자율</th>
+                <th>동아리</th>
+                <th>봉사</th>
+                <th>진로</th>
+                <th>계</th>
+                <th>삭제</th>
+            </tr>
+        </thead>
+        <tbody id="annualHoursBody">
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 20px; text-align: center;">
+        <button class="btn" onclick="addRow()">행 추가</button>
+        <button class="btn btn-success" onclick="saveAnnualHours()">저장</button>
+    </div>
+</div>
+
+
+<script src="csv.js"></script>
+<script>
+// 예시파일 다운로드 함수
+function downloadExampleFile() {
+    const link = document.createElement('a');
+    link.href = '1st.csv';
+    link.download = '1st.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// 과목 매핑: CSV 컬럼명 -> 저장용 키
+const subjectMapping = {
+    '국어': '국어',
+    '사회': '사회',
+    '도덕': '도덕',
+    '수학': '수학',
+    '과학': '과학',
+    '실과': '실과',
+    '체육': '체육',
+    '음악': '음악',
+    '미술': '미술',
+    '영어': '영어',
+    '자율': '창체(자)',
+    '동아리': '창체(동)',
+    '봉사': '창체(봉)',
+    '진로': '창체(진)'
+};
+
+const headerColumns = ['주', '기간', '수업일수', '국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로', '계'];
+
+let currentSemester = '1'; // 현재 선택된 학기
+
+function init() {
+    // 로그인 체크
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    renderAnnualTable();
+    setupCSVLoader();
+}
+
+function switchSemester() {
+    const select = document.getElementById('semesterSelect');
+    currentSemester = select.value;
+    renderAnnualTable();
+}
+
+function renderAnnualTable() {
+    const saved = localStorage.getItem('school_v5_final');
+    let annualData = [];
+    
+    if (saved) {
+        const state = JSON.parse(saved);
+        const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
+        annualData = state[key] || [];
+    }
+    
+    const tbody = document.getElementById('annualHoursBody');
+    tbody.innerHTML = '';
+    
+    if (annualData.length === 0) {
+        // 빈 행 하나 추가
+        const row = createDataRow({}, 0);
+        tbody.appendChild(row);
+    } else {
+        annualData.forEach((rowData, idx) => {
+            const row = createDataRow(rowData, idx);
+            tbody.appendChild(row);
+        });
+    }
+    
+    // 합계 행 추가 (마지막 행)
+    addTotalRow();
+}
+
+function addTotalRow() {
+    const tbody = document.getElementById('annualHoursBody');
+    const rows = tbody.querySelectorAll('.data-row');
+    
+    // 기존 합계 행 제거
+    const existingTotalRow = tbody.querySelector('.total-row');
+    if (existingTotalRow) {
+        existingTotalRow.remove();
+    }
+    
+    if (rows.length === 0) return;
+    
+    const totalRow = document.createElement('tr');
+    totalRow.className = 'total-row';
+    
+    // 주, 기간, 수업일수는 빈 값
+    totalRow.innerHTML += '<td></td>'; // 주
+    totalRow.innerHTML += '<td>합계</td>'; // 기간
+    totalRow.innerHTML += '<td></td>'; // 수업일수
+    
+    // 4번째 열부터 끝 열까지 합계 계산 (마지막 행 제외)
+    const subjects = ['국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로'];
+    const totals = {};
+    
+    subjects.forEach(subject => {
+        let sum = 0;
+        rows.forEach(row => {
+            const input = row.querySelector(`input[data-subject="${subject}"]`);
+            if (input) {
+                sum += parseInt(input.value) || 0;
+            }
+        });
+        totals[subject] = sum;
+        totalRow.innerHTML += `<td style="font-weight:bold">${sum}</td>`;
+    });
+    
+    // 계 열 합계
+    const totalSum = subjects.reduce((sum, sub) => sum + (totals[sub] || 0), 0);
+    totalRow.innerHTML += `<td style="font-weight:bold">${totalSum}</td>`;
+    
+    // 삭제 버튼 열은 빈 값
+    totalRow.innerHTML += '<td></td>';
+    
+    tbody.appendChild(totalRow);
+}
+
+function deleteRowByElement(btn) {
+    if (!confirm('이 행을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    const row = btn.parentElement.parentElement;
+    const tbody = document.getElementById('annualHoursBody');
+    const rows = Array.from(tbody.querySelectorAll('.data-row'));
+    const rowIndex = rows.indexOf(row);
+    
+    if (rowIndex >= 0) {
+        row.remove();
+        
+        // 합계 행 업데이트
+        addTotalRow();
+        
+        // 데이터 저장 (localStorage에 저장)
+        saveAnnualHours();
+    }
+}
+
+function createDataRow(rowData, rowIndex = null) {
+    const row = document.createElement('tr');
+    row.className = 'data-row';
+    
+    const actualRowIndex = rowIndex !== null ? rowIndex : -1;
+    
+    // 주
+    row.innerHTML += `<td><input type="text" class="week-input" value="${rowData.주 || ''}" onchange="updateRowDataByElement(this, '주', this.value)"></td>`;
+    
+    // 기간
+    row.innerHTML += `<td><input type="text" class="period-input" value="${rowData.기간 || ''}" onchange="updateRowDataByElement(this, '기간', this.value)"></td>`;
+    
+    // 수업일수
+    row.innerHTML += `<td><input type="number" class="days-input" value="${rowData.수업일수 || ''}" min="0" onchange="updateRowDataByElement(this, '수업일수', this.value)"></td>`;
+    
+    // 과목별 시수
+    ['국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로'].forEach(subject => {
+        const value = rowData[subject] || '';
+        row.innerHTML += `<td><input type="number" class="subject-input" data-subject="${subject}" value="${value}" min="0" onchange="updateRowDataByElement(this, '${subject}', this.value); calculateTotal(this.parentElement)"></td>`;
+    });
+    
+    // 계 (합계)
+    const total = calculateRowTotal(rowData);
+    row.innerHTML += `<td class="total-cell" style="font-weight:bold">${total}</td>`;
+    
+    // 행 삭제 버튼
+    const actualIndex = rowIndex !== null ? rowIndex : -1;
+    row.innerHTML += `<td><button class="btn btn-delete" onclick="deleteRowByElement(this)">삭제</button></td>`;
+    
+    return row;
+}
+
+function calculateRowTotal(rowData) {
+    // 계: 4번부터 17번 열의 값 합계 (과목별 시수만, 수업일수 제외)
+    const subjects = ['국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로'];
+    return subjects.reduce((sum, sub) => sum + (parseInt(rowData[sub]) || 0), 0);
+}
+
+function calculateTotal(row) {
+    // 계: 4번부터 17번 열의 값 합계 (과목별 시수만, 수업일수 제외)
+    const subjectInputs = row.querySelectorAll('.subject-input');
+    let total = 0;
+    subjectInputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    
+    const totalCell = row.querySelector('.total-cell');
+    if (totalCell) {
+        totalCell.textContent = total;
+    }
+    
+    // 합계 행도 업데이트
+    addTotalRow();
+}
+
+function updateRowDataByElement(element, column, value) {
+    const row = element.parentElement.parentElement; // tr 요소
+    const tbody = document.getElementById('annualHoursBody');
+    const rowIndex = Array.from(tbody.children).indexOf(row);
+    
+    updateRowData(rowIndex, column, value);
+}
+
+function updateRowData(rowIndex, column, value) {
+    const saved = localStorage.getItem('school_v5_final');
+    const state = saved ? JSON.parse(saved) : {
+        classCount: 3,
+        periodCount: 7,
+        subjectSheets: [],
+        classData: {},
+        preferences: {},
+        currentWeek: new Date(),
+        annualHours: {}
+    };
+    
+    const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
+    if (!state[key]) state[key] = [];
+    
+    if (rowIndex >= state[key].length) {
+        // 새 행 추가
+        while (state[key].length <= rowIndex) {
+            state[key].push({});
+        }
+    }
+    
+    state[key][rowIndex][column] = value;
+    localStorage.setItem('school_v5_final', JSON.stringify(state));
+}
+
+function setupCSVLoader() {
+    const csvFileInput = document.getElementById('csvFile');
+    if (csvFileInput) {
+        csvFileInput.addEventListener('change', handleCSVLoad);
+    }
+}
+
+function handleCSVLoad(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+        // csv.js의 parseCSV 함수 사용
+        if (typeof parseCSV === 'function') {
+            const rows = parseCSV(reader.result);
+            applyCSVToAnnualTable(rows);
+        } else {
+            // csv.js가 로드되지 않은 경우 직접 파싱
+            const rows = parseCSVDirect(reader.result);
+            applyCSVToAnnualTable(rows);
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
+function parseCSVDirect(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+        
+        if (char === '"' && next === '"') {
+            value += '"';
+            i++;
+        } else if (char === '"') {
+            insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
+            row.push(value.trim());
+            value = '';
+        } else if ((char === '\n' || char === '\r') && !insideQuotes) {
+            if (value || row.length) {
+                row.push(value.trim());
+                rows.push(row);
+                row = [];
+                value = '';
+            }
+        } else {
+            value += char;
+        }
+    }
+    if (value || row.length) {
+        row.push(value.trim());
+        rows.push(row);
+    }
+    return rows;
+}
+
+// parseCSV는 csv.js에서 제공됨
+
+// CSV 미리보기 제거됨
+
+function applyCSVToAnnualTable(rows) {
+    if (rows.length < 2) return;
+    
+    const dataRows = rows.slice(1);
+    
+    // 고정된 열 인덱스 매핑 (CSV 열 번호는 1부터 시작하므로 인덱스는 -1)
+    const columnIndexes = {
+        '주': 0,  // 1번째 열 (인덱스 0)
+        '기간': 1,  // 2번째 열 (인덱스 1)
+        '수업일수': 4,  // 5번째 열 (인덱스 4)
+        '국어': 149,  // 150번째 열 (인덱스 149)
+        '사회': 154,  // 155번째 열 (인덱스 154)
+        '도덕': 155,  // 156번째 열 (인덱스 155)
+        '수학': 156,  // 157번째 열 (인덱스 156)
+        '과학': 157,  // 158번째 열 (인덱스 157)
+        '실과': 158,  // 159번째 열 (인덱스 158)
+        '체육': 159,  // 160번째 열 (인덱스 159)
+        '음악': 160,  // 161번째 열 (인덱스 160)
+        '미술': 161,  // 162번째 열 (인덱스 161)
+        '영어': 162,  // 163번째 열 (인덱스 162)
+        '자율': 163,  // 164번째 열 (인덱스 163)
+        '동아리': 164,  // 165번째 열 (인덱스 164)
+        '봉사': 165,  // 166번째 열 (인덱스 165)
+        '진로': 166   // 167번째 열 (인덱스 166)
+    };
+    
+    const saved = localStorage.getItem('school_v5_final');
+    const state = saved ? JSON.parse(saved) : {
+        classCount: 3,
+        periodCount: 7,
+        subjectSheets: [],
+        classData: {},
+        preferences: {},
+        currentWeek: new Date(),
+        annualHours: {}
+    };
+    
+    const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
+    state[key] = [];
+    
+    // 1열(주 열)이 비어있는 행 찾기
+    const emptyFirstColumnRows = [];
+    dataRows.forEach((row, rowIdx) => {
+        const firstColumnValue = columnIndexes['주'] < row.length ? (row[columnIndexes['주']] || '').trim() : '';
+        if (!firstColumnValue) {
+            emptyFirstColumnRows.push(rowIdx + 1); // 사용자에게 보여줄 때는 1부터 시작
+        }
+    });
+    
+    // 1열이 비어있는 행이 있으면 삭제 여부 확인
+    let filteredRows = dataRows;
+    if (emptyFirstColumnRows.length > 0) {
+        const shouldDelete = confirm(`1열(주 열)에 내용이 없는 행이 ${emptyFirstColumnRows.length}개 발견되었습니다.\n행 번호: ${emptyFirstColumnRows.join(', ')}\n이 행들을 삭제하시겠습니까?`);
+        if (shouldDelete) {
+            filteredRows = dataRows.filter((row, rowIdx) => {
+                const firstColumnValue = columnIndexes['주'] < row.length ? (row[columnIndexes['주']] || '').trim() : '';
+                return firstColumnValue !== '';
+            });
+        }
+    }
+    
+    filteredRows.forEach((row, rowIdx) => {
+        const rowData = {};
+        
+        // 주 (1번째 열)
+        if (columnIndexes['주'] < row.length) {
+            rowData['주'] = row[columnIndexes['주']] || '';
+        }
+        
+        // 기간 (2번째 열)
+        if (columnIndexes['기간'] < row.length) {
+            rowData['기간'] = row[columnIndexes['기간']] || '';
+        }
+        
+        // 수업일수 (5번째 열)
+        if (columnIndexes['수업일수'] < row.length) {
+            const value = row[columnIndexes['수업일수']];
+            rowData['수업일수'] = parseInt(value) || 0;
+        } else {
+            rowData['수업일수'] = 0;
+        }
+        
+        // 과목별 시수
+        const subjects = ['국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로'];
+        subjects.forEach(subject => {
+            const idx = columnIndexes[subject];
+            if (idx !== null && idx < row.length) {
+                const value = row[idx];
+                rowData[subject] = parseInt(value) || 0;
+            } else {
+                rowData[subject] = 0;
+            }
+        });
+        
+        // 계 (합계 계산: 4번부터 17번 열의 값 합계, 과목별 시수만)
+        const total = subjects.reduce((sum, sub) => sum + (parseInt(rowData[sub]) || 0), 0);
+        rowData['계'] = total;
+        
+        if (Object.keys(rowData).length > 0) {
+            state[key].push(rowData);
+        }
+    });
+    
+    localStorage.setItem('school_v5_final', JSON.stringify(state));
+    renderAnnualTable();
+    alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었습니다.`);
+}
+
+function saveAnnualHours() {
+    // 테이블에서 모든 데이터 읽기 (합계 행 제외)
+    const tbody = document.getElementById('annualHoursBody');
+    const rows = tbody.querySelectorAll('.data-row');
+    const tableData = [];
+    
+    rows.forEach(row => {
+        const rowData = {};
+        
+        // 주
+        const weekInput = row.querySelector('.week-input');
+        if (weekInput) rowData['주'] = weekInput.value || '';
+        
+        // 기간
+        const periodInput = row.querySelector('.period-input');
+        if (periodInput) rowData['기간'] = periodInput.value || '';
+        
+        // 수업일수
+        const daysInput = row.querySelector('.days-input');
+        if (daysInput) rowData['수업일수'] = parseInt(daysInput.value) || 0;
+        
+        // 과목별 시수
+        const subjects = ['국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로'];
+        subjects.forEach(subject => {
+            const input = row.querySelector(`input[data-subject="${subject}"]`);
+            if (input) {
+                rowData[subject] = parseInt(input.value) || 0;
+            }
+        });
+        
+        // 계 계산 (4번부터 17번 열 합계)
+        const total = calculateRowTotal(rowData);
+        rowData['계'] = total;
+        
+        if (Object.keys(rowData).length > 0) {
+            tableData.push(rowData);
+        }
+    });
+    
+    // 합계 행 업데이트
+    addTotalRow();
+    
+    // 서버에 저장
+    const loginInfoStr = localStorage.getItem('timetable_login');
+    if (!loginInfoStr) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    let loginInfo;
+    try {
+        loginInfo = JSON.parse(loginInfoStr);
+    } catch (e) {
+        alert('로그인 정보를 불러올 수 없습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    const nickname = loginInfo.nickname;
+    if (!nickname) {
+        alert('로그인 정보가 올바르지 않습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    fetch(`${window.location.origin}/api/annual-data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            nickname: nickname,
+            semester: currentSemester,
+            annualData: tableData
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.message || `HTTP ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.success) {
+            alert(`${currentSemester}학기 연간시수표가 서버에 저장되었습니다.`);
+        } else {
+            alert('저장 중 오류가 발생했습니다: ' + result.message);
+        }
+    })
+    .catch(error => {
+        console.error('저장 오류:', error);
+        alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
+    });
+}
+
+// 빈 행 추가 함수
+function addRow() {
+    const tbody = document.getElementById('annualHoursBody');
+    // 합계 행 제거
+    const totalRow = tbody.querySelector('.total-row');
+    if (totalRow) {
+        totalRow.remove();
+    }
+    
+    const rowIndex = tbody.querySelectorAll('.data-row').length;
+    const row = createDataRow({}, rowIndex);
+    tbody.appendChild(row);
+    
+    // 합계 행 다시 추가
+    addTotalRow();
+}
+
+init();
+</script>
+
+</body>
+</html>

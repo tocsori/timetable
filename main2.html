@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>초등 교과별 고정 및 자동 배치 시스템</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root { --fixed-bg: #e9ecef; --accent: #4a90e2; --sub-bg: #ffffff; --complete: #d4edda; }
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; color: #333; line-height: 1.5; }
+        
+        /* 주차 표시 */
+        .week-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; font-size: 18px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .nav-buttons { text-align: right; margin-top: 10px; }
+        
+        .section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 30px; }
+        .section h2 { margin-top: 0; margin-bottom: 15px; }
+        #classTimetableSection h2 { margin-top: 10px; }
+        
+        /* 고정 교과 설정 스타일 */
+        .subject-manager { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; flex-wrap: wrap; }
+        #masterSheetsContainer { display: flex; flex-wrap: wrap; gap: 10px; }
+        .master-sheet { border: 2px solid var(--accent); padding: 8px; border-radius: 8px; margin-bottom: 0; background: #f8fbff; width: fit-content; min-width: 280px; }
+        .master-sheet h3 { margin-top: 0; margin-bottom: 5px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+        .master-sheet table { font-size: 12px; margin: 5px 0; width: auto; }
+        .master-sheet th, .master-sheet td { padding: 3px; height: 20px; font-size: 11px; width: auto; min-width: 35px; }
+        .master-sheet textarea { height: 30px; font-size: 13px; padding: 3px; margin-top: 3px; width: 100%; }
+        
+        /* 학급 선택 팝업 */
+        .class-selector { display: none; position: absolute; background: white; border: 1px solid #ccc; padding: 10px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; min-width: 120px; }
+        .class-selector label { display: block; font-size: 13px; cursor: pointer; padding: 4px; border-radius: 4px; }
+        .class-selector label:hover { background: #f0f0f0; }
+        
+        /* 과목 선택 팝업 */
+        .subject-selector { display: none; position: absolute; background: white; border: 1px solid #ccc; padding: 10px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; min-width: 150px; max-height: 300px; overflow-y: auto; }
+        .subject-selector label { display: block; font-size: 12px; cursor: pointer; padding: 4px; border-radius: 4px; }
+        .subject-selector label:hover { background: #f0f0f0; }
+        .subject-cell { cursor: pointer; position: relative; }
+        .subject-cell:hover { background: #eef5ff; }
+
+        /* 학급 그리드 */
+        .class-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        .class-card { background: white; padding: 8px; border-radius: 8px; border: 1px solid #dee2e6; position: relative; width: fit-content; min-width: 280px; }
+        .class-card.completed { border: 2px solid #28a745; background: #f9fffb; }
+        .class-card h3 { margin-top: 0; margin-bottom: 5px; font-size: 16px; }
+        .class-card h4 { margin: 8px 0 5px 0; font-size: 14px; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 12px; table-layout: fixed; }
+        th, td { border: 1px solid #ced4da; padding: 3px; text-align: center; height: 20px; }
+        th { background: #eee; font-weight: bold; font-size: 11px; }
+        .class-card table { width: auto; }
+        .class-card th, .class-card td { font-size: 11px; min-width: 35px; }
+        
+        /* 통합 주간 시수 표 최소화 */
+        #unifiedHoursTable { width: fit-content; }
+        #unifiedHoursTable table { width: auto; font-size: 11px; margin: 3px 0; }
+        #unifiedHoursTable th, #unifiedHoursTable td { padding: 2px 4px; height: 18px; font-size: 10px; min-width: 30px; }
+        #unifiedHoursTable th { font-size: 10px; }
+        #unifiedHoursTable input { width: 35px; font-size: 10px; padding: 1px; }
+        
+        .master-td { cursor: move; background: white; font-size: 10px; transition: 0.2s; user-select: none; }
+        .master-td:hover { background: #eef5ff; border: 1px solid var(--accent); }
+        .master-td.dragging { opacity: 0.5; }
+        .master-td.drag-over { background-color: #fff3cd !important; border: 2px dashed #ffc107 !important; }
+        .selected-classes { color: var(--accent); font-weight: bold; display: block; font-size: 10px; }
+
+        .fixed-cell { background-color: var(--fixed-bg); color: #666; font-weight: bold; font-size: 11px; }
+        .selected-subject { font-size: 11px; display: block; }
+        .target-zero { background-color: var(--complete); font-weight: bold; }
+        
+        /* 과목별 색상 */
+        .subject-korean { color: #e74c3c; font-weight: bold; }
+        .subject-social { color: #3498db; font-weight: bold; }
+        .subject-ethics { color: #9b59b6; font-weight: bold; }
+        .subject-math { color: #e67e22; font-weight: bold; }
+        .subject-science { color: #1abc9c; font-weight: bold; }
+        .subject-practical { color: #f39c12; font-weight: bold; }
+        .subject-pe { color: #27ae60; font-weight: bold; }
+        .subject-music { color: #e91e63; font-weight: bold; }
+        .subject-art { color: #ff9800; font-weight: bold; }
+        .subject-english { color: #2196f3; font-weight: bold; }
+        
+        /* 드래그 앤 드롭 */
+        .draggable-cell { cursor: move; user-select: none; }
+        .dragging { opacity: 0.5; }
+        .drag-over { background-color: #fff3cd !important; border: 2px dashed #ffc107 !important; }
+        
+        input, select, textarea { border: 1px solid #ddd; border-radius: 4px; padding: 3px; font-family: inherit; }
+        .class-card input, .class-card select { font-size: 10px; padding: 2px; }
+        .class-card textarea { width: 100%; height: 35px; resize: none; margin-top: 3px; font-size: 10px; border-color: #eee; padding: 3px; }
+        
+        .btn { padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; margin: 2px; }
+        .btn:hover { opacity: 0.8; }
+        .btn-auto { background: #6c757d; float: right; }
+        .btn-del { background: #dc3545; font-size: 11px; padding: 3px 8px; }
+        .btn-clear { background: #dc3545; float: right; margin-left: 5px; }
+        .btn-export { background: #28a745; }
+        .btn-import { background: #17a2b8; }
+        .btn-save { background: #ffc107; color: #333; }
+        .btn-load { background: #fd7e14; }
+        
+        .badge { position: absolute; right: 8px; top: 8px; display: none; background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 9px; }
+        
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; justify-content: flex-end; }
+        
+        /* 인쇄 최적화 */
+        @media print {
+            body { padding: 0; background: white; }
+            .section { page-break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+            .btn, .nav-buttons, .toolbar, .subject-manager button, .master-sheet button { display: none !important; }
+            .class-card { page-break-inside: avoid; }
+            .week-header { page-break-after: avoid; }
+            textarea { border: none; background: transparent; }
+        }
+        
+        /* 파일 입력 숨김 */
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+
+<!-- 주차 표시 -->
+<div class="week-header">
+    <div id="weekDisplay"></div>
+    <div class="nav-buttons">
+        <button class="btn" onclick="location.href='annual.html'">연간시수표</button>
+        <button class="btn" onclick="location.href='admin.html'">관리자 페이지</button>
+        <button class="btn" onclick="logout()" style="background: #dc3545;">로그아웃</button>
+    </div>
+</div>
+
+<!-- 툴바 (타이틀 바로 밑) -->
+<div class="section" style="margin-bottom: 20px;">
+    <div class="toolbar">
+        <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
+        <button class="btn btn-load" onclick="document.getElementById('fileInput').click()">파일 불러오기</button>
+        <input type="file" id="fileInput" accept=".json,.xlsx" onchange="loadFromFile(event)">
+        <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
+        <button class="btn btn-import" onclick="document.getElementById('excelInput').click()">엑셀 불러오기</button>
+        <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
+        <button class="btn" onclick="window.print()">인쇄</button>
+    </div>
+</div>
+
+<!-- 연간시수표 선택 섹션 -->
+<div class="section" style="padding: 15px; margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <label><strong>2학기</strong></label>
+        <button class="btn" onclick="location.href='main1.html'" style="background: #17a2b8; margin-left: 10px;">1학기로 이동</button>
+        <div id="weekSelectorContainer" style="display: none; margin-left: 20px; align-items: center;">
+            <button class="btn" onclick="changeWeek(-1)" style="padding: 6px 12px; font-size: 16px;">&lt;</button>
+            <span id="annualWeekDisplay" style="margin: 0 10px; font-weight: bold; min-width: 80px; text-align: center; display: inline-block;"></span>
+            <button class="btn" onclick="changeWeek(1)" style="padding: 6px 12px; font-size: 16px;">&gt;</button>
+            <span id="periodDisplay" style="margin-left: 15px; font-weight: bold; color: var(--accent);"></span>
+        </div>
+    </div>
+</div>
+
+<div class="section" style="padding: 15px;">
+    <h2 style="font-size: 16px; margin-bottom: 10px;">⚙️ 고정 교과 및 전담 교사 설정(전담 고정표를 수정한 후에는 꼭 시간표를 확인하세요.)</h2>
+    <div class="subject-manager">
+        <span><strong>새 고정 시트:</strong></span>
+        <select id="newSubName" style="width:120px;"></select>
+        <button class="btn" onclick="addSubjectSheet()">시트 생성</button>
+    </div>
+
+    <div id="masterSheetsContainer"></div>
+</div>
+
+<div class="section">
+    <h2>📊 전체 학급 주간 시수 및 달성도</h2>
+    <div id="unifiedHoursTable"></div>
+    <div class="toolbar" style="margin-top: 15px;">
+        <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
+        <button class="btn btn-load" onclick="document.getElementById('fileInputBottom').click()">파일 불러오기</button>
+        <input type="file" id="fileInputBottom" accept=".json,.xlsx" onchange="loadFromFile(event)" style="display:none">
+        <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
+        <button class="btn btn-import" onclick="document.getElementById('excelInputBottom').click()">엑셀 불러오기</button>
+        <input type="file" id="excelInputBottom" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
+        <button class="btn" onclick="window.print()">인쇄</button>
+    </div>
+</div>
+
+<div class="section" id="classTimetableSection">
+    <h2>🏫 학급별 시간표 관리 <span id="weekPeriodInfo" style="font-size: 14px; color: #666; font-weight: normal;"></span></h2>
+    <div id="classGrid" class="class-grid"></div>
+    <div id="unifiedMemoContainer" style="margin-top: 20px;">
+        <h3 style="font-size: 14px; margin-bottom: 10px;">📝 메모</h3>
+        <div id="unifiedMemoContent"></div>
+    </div>
+</div>
+
+
+<div id="globalClassSelector" class="class-selector"></div>
+<div id="globalSubjectSelector" class="subject-selector"></div>
+
+<script>
+const allSubjects = ["국어", "사회", "도덕", "수학", "과학", "실과", "체육", "음악", "미술", "영어", "창체(자)", "창체(동)", "창체(봉)", "창체(진)"];
+const days = ["월", "화", "수", "목", "금"];
+
+// 과목별 CSS 클래스 매핑
+function getSubjectClass(subject) {
+    const classMap = {
+        '국어': 'subject-korean',
+        '사회': 'subject-social',
+        '도덕': 'subject-ethics',
+        '수학': 'subject-math',
+        '과학': 'subject-science',
+        '실과': 'subject-practical',
+        '체육': 'subject-pe',
+        '음악': 'subject-music',
+        '미술': 'subject-art',
+        '영어': 'subject-english'
+    };
+    return classMap[subject] || '';
+}
+
+let state = {
+    classCount: 3,
+    periodCount: 7, // 교시 수
+    subjectSheets: [], // { subName, memo: "", rules: { "0-0": [1, 2] } }
+    classData: {}, // { classNum: { timetable: [], targetHours: [], memo: "" } }
+    preferences: {}, // { subject: [1, 2, 3] } - 선호하는 교시 배열
+    currentWeek: new Date(), // 현재 주차
+    annualHours: {}, // 연간시수표 { subject: hours }
+    annualTableData: null, // 선택된 연간시수표 데이터
+    memo: "", // 통합 메모
+    weeklyData2: {} // 2학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {} } }
+};
+
+function init() {
+    // 로그인 체크
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    // 서버에서 데이터 불러오기
+    loadDataFromServer();
+}
+
+// 서버에서 데이터 불러오기
+function loadDataFromServer() {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.success && result.data) {
+                const parsed = result.data;
+                Object.assign(state, parsed);
+                if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
+                // periodCount가 없으면 기본값 7 설정
+                if (!state.periodCount) state.periodCount = 7;
+                // annualHours가 없으면 빈 객체 설정
+                if (!state.annualHours) state.annualHours = {};
+                // weeklyData2가 없으면 빈 객체 설정
+                if (!state.weeklyData2) state.weeklyData2 = {};
+            } else {
+                // 초기 상태 설정
+                state.periodCount = 7;
+                state.annualHours = {};
+                state.weeklyData2 = {};
+            }
+            
+            // 과목 선택 드롭다운 채우기
+            const subSelect = document.getElementById('newSubName');
+            allSubjects.forEach(s => subSelect.add(new Option(s, s)));
+            
+            updateWeekDisplay();
+            renderAll();
+            
+            // 기본값으로 1학기 1주 자동 로드
+            loadAnnualDataOnInit();
+        })
+        .catch(error => {
+            console.error('데이터 불러오기 오류:', error);
+            alert('서버에서 데이터를 불러오는 중 오류가 발생했습니다.');
+            // 초기 상태로 진행
+            state.periodCount = 7;
+            state.annualHours = {};
+            state.weeklyData2 = {};
+            
+            const subSelect = document.getElementById('newSubName');
+            allSubjects.forEach(s => subSelect.add(new Option(s, s)));
+            
+            updateWeekDisplay();
+            renderAll();
+            loadAnnualDataOnInit();
+        });
+}
+
+// 초기화 시 2학기 1주 자동 로드
+function loadAnnualDataOnInit() {
+    const semester = '2';
+    const loginInfoStr = localStorage.getItem('timetable_login');
+    
+    if (!loginInfoStr) {
+        return;
+    }
+    
+    let loginInfo;
+    try {
+        loginInfo = JSON.parse(loginInfoStr);
+    } catch (e) {
+        return;
+    }
+    
+    const nickname = loginInfo.nickname;
+    if (!nickname) {
+        return;
+    }
+    
+    fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${semester}`)
+        .then(response => {
+            if (!response.ok) {
+                // 초기 로드 실패는 조용히 처리
+                return null;
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (!result || !result.success || !result.data || result.data.length === 0) {
+                // 데이터가 없으면 메시지 표시
+                const weekContainer = document.getElementById('weekSelectorContainer');
+                if (weekContainer) {
+                    weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
+                    weekContainer.style.display = 'flex';
+                }
+                return;
+            }
+            
+            const data = result.data;
+            state.annualTableData = data;
+            
+            // 주 선택 컨테이너 표시
+            const weekContainer = document.getElementById('weekSelectorContainer');
+            
+            if (data && data.length > 0) {
+                // 첫 번째 주로 초기화
+                currentWeekIndex = 0;
+                
+                // 첫 번째 주의 데이터 불러오기
+                loadWeekDataFromStorage(currentWeekIndex);
+                
+                // 화면 업데이트
+                updateAnnualWeekDisplay();
+                renderAll();
+                
+                // 목표시수 데이터 불러오기
+                loadWeekData();
+                
+                weekContainer.style.display = 'flex';
+            }
+        })
+        .catch(error => {
+            // 초기 로드 실패는 조용히 처리 (사용자가 나중에 선택할 수 있음)
+            console.log('초기 데이터 로드 실패:', error.message);
+        });
+}
+
+function logout() {
+    if (confirm('로그아웃하시겠습니까?')) {
+        localStorage.removeItem('timetable_login');
+        window.location.href = 'login.html';
+    }
+}
+
+// 주차 표시 업데이트 (로그인 정보로 변경)
+function updateWeekDisplay() {
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (loginInfo) {
+        try {
+            const login = JSON.parse(loginInfo);
+            if (login.schoolName && login.grade) {
+                document.getElementById('weekDisplay').innerHTML = 
+                    `${login.schoolName} ${login.grade}학년 시간표 - 2학기`;
+                return;
+            }
+        } catch (e) {
+            // 파싱 오류 시 기존 방식 사용
+        }
+    }
+    
+    // 로그인 정보가 없으면 기존 주차 표시
+    const date = state.currentWeek || new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    
+    // 해당 월의 첫 번째 날
+    const firstDay = new Date(year, month - 1, 1);
+    const firstDayOfWeek = firstDay.getDay();
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDayOfWeek);
+    
+    // 현재 날짜가 속한 주 찾기
+    const diffTime = date.getTime() - startDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const weekNumber = Math.floor(diffDays / 7) + 1;
+    
+    // 해당 주의 시작일
+    const weekStart = new Date(startDate);
+    weekStart.setDate(startDate.getDate() + (weekNumber - 1) * 7);
+    const weekStartMonth = weekStart.getMonth() + 1;
+    const weekStartDate = weekStart.getDate();
+    
+    document.getElementById('weekDisplay').innerHTML = 
+        `${month}월 ${weekStartDate}일 주 (${weekNumber}주차) - 2학기`;
+}
+
+// 주와 기간 정보 업데이트
+function updateWeekPeriodInfo() {
+    const weekPeriodInfo = document.getElementById('weekPeriodInfo');
+    if (!weekPeriodInfo) return;
+    
+    if (currentWeekIndex >= 0 && state.annualTableData && state.annualTableData[currentWeekIndex]) {
+        const weekData = state.annualTableData[currentWeekIndex];
+        const week = currentWeekIndex + 1;
+        const period = weekData['기간'] || '';
+        weekPeriodInfo.textContent = `(${week}주${period ? `, 기간: ${period}` : ''})`;
+    } else {
+        weekPeriodInfo.textContent = '';
+    }
+}
+
+
+function saveAndRefresh(full = true) {
+    // 현재 주의 데이터를 주별 데이터에 저장
+    if (currentWeekIndex >= 0) {
+        saveCurrentWeekData();
+    }
+    
+    // 서버에 데이터 저장
+    saveDataToServer();
+    
+    if (full) { renderMasterSheets(); renderClassGrid(); renderUnifiedMemo(); }
+}
+
+// 서버에 데이터 저장
+function saveDataToServer() {
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) return;
+    
+    const login = JSON.parse(loginInfo);
+    const nickname = login.nickname;
+    
+    fetch(`${window.location.origin}/api/data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            nickname: nickname,
+            state: state
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (!result.success) {
+            console.error('데이터 저장 실패:', result.message);
+        }
+    })
+    .catch(error => {
+        console.error('데이터 저장 오류:', error);
+    });
+}
+
+// 현재 주의 데이터를 저장
+function saveCurrentWeekData() {
+    if (currentWeekIndex < 0) return;
+    
+    if (!state.weeklyData2) state.weeklyData2 = {};
+    
+    // 현재 주의 subjectSheets와 classData를 깊은 복사로 저장
+    state.weeklyData2[currentWeekIndex] = {
+        subjectSheets: JSON.parse(JSON.stringify(state.subjectSheets)),
+        classData: JSON.parse(JSON.stringify(state.classData))
+    };
+}
+
+// 특정 주의 데이터를 불러오기
+function loadWeekDataFromStorage(weekIndex) {
+    if (!state.weeklyData2 || !state.weeklyData2[weekIndex]) {
+        // 저장된 데이터가 없으면 초기화
+        state.subjectSheets = [];
+        state.classData = {};
+        
+        // 학급 데이터 초기화
+        for (let i = 1; i <= state.classCount; i++) {
+            if (!state.classData[i]) {
+                state.classData[i] = { 
+                    timetable: Array(state.periodCount).fill().map(() => Array(5).fill("")), 
+                    targetHours: Array(allSubjects.length).fill(0),
+                    memo: ""
+                };
+            }
+        }
+    } else {
+        // 저장된 데이터 불러오기
+        const weekData = state.weeklyData2[weekIndex];
+        state.subjectSheets = JSON.parse(JSON.stringify(weekData.subjectSheets));
+        state.classData = JSON.parse(JSON.stringify(weekData.classData));
+    }
+}
+
+// 서버에 저장
+function saveToServer() {
+    saveDataToServer();
+    alert('서버에 저장되었습니다.');
+}
+
+// 파일 불러오기
+function loadFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const loaded = JSON.parse(e.target.result);
+            Object.assign(state, loaded);
+            if (loaded.currentWeek) state.currentWeek = new Date(loaded.currentWeek);
+            updateWeekDisplay();
+            renderPreferences();
+            renderAll();
+            alert('파일을 성공적으로 불러왔습니다.');
+        } catch (err) {
+            alert('파일을 불러오는 중 오류가 발생했습니다: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+// 엑셀 내보내기
+function exportToExcel() {
+    const wb = XLSX.utils.book_new();
+    
+    // 고정 교과 시트
+    const masterData = [];
+    masterData.push(['고정 교과 설정']);
+    state.subjectSheets.forEach(sheet => {
+        masterData.push([`[${sheet.subName}] 전담 고정표`]);
+        masterData.push(['교시', '월', '화', '수', '목', '금']);
+        for (let r = 0; r < state.periodCount; r++) {
+            const row = [r + 1];
+            for (let c = 0; c < 5; c++) {
+                const key = `${r}-${c}`;
+                const classes = sheet.rules[key] || [];
+                row.push(classes.length > 0 ? classes.join(',') + '반' : '');
+            }
+            masterData.push(row);
+        }
+        masterData.push([]);
+    });
+    const masterWs = XLSX.utils.aoa_to_sheet(masterData);
+    XLSX.utils.book_append_sheet(wb, masterWs, '고정교과');
+    
+    // 학급별 시간표 시트
+    for (let i = 1; i <= state.classCount; i++) {
+        if (!state.classData[i]) continue;
+        const data = state.classData[i];
+        const classData = [];
+        classData.push([`${i}반 시간표`]);
+        classData.push(['교시', '월', '화', '수', '목', '금']);
+        
+        for (let r = 0; r < state.periodCount; r++) {
+            const row = [r + 1];
+            for (let c = 0; c < 5; c++) {
+                const key = `${r}-${c}`;
+                let fixedSub = null;
+                state.subjectSheets.forEach(sheet => {
+                    if (sheet.rules[key] && sheet.rules[key].includes(i)) fixedSub = sheet.subName;
+                });
+                row.push(fixedSub || data.timetable[r][c] || '');
+            }
+            classData.push(row);
+        }
+        
+        classData.push([]);
+        classData.push(['과목', ...allSubjects]);
+        classData.push(['목표시수', ...data.targetHours]);
+        
+        if (data.memo) {
+            classData.push([]);
+            classData.push(['메모', data.memo]);
+        }
+        
+        const ws = XLSX.utils.aoa_to_sheet(classData);
+        XLSX.utils.book_append_sheet(wb, ws, `${i}반`);
+    }
+    
+    XLSX.writeFile(wb, `시간표_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+// 엑셀 불러오기
+function importFromExcel(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            
+            // 학급별 시트 읽기
+            for (let i = 1; i <= state.classCount; i++) {
+                const sheetName = `${i}반`;
+                if (!workbook.Sheets[sheetName]) continue;
+                
+                const ws = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                
+                if (!state.classData[i]) {
+                    state.classData[i] = { 
+                        timetable: Array(state.periodCount).fill().map(() => Array(5).fill("")), 
+                        targetHours: Array(allSubjects.length).fill(0),
+                        memo: ""
+                    };
+                }
+                
+                // 시간표 읽기 (2행부터 시작)
+                for (let r = 2; r < 2 + state.periodCount && r - 2 < state.periodCount; r++) {
+                    if (!jsonData[r]) continue;
+                    for (let c = 1; c < 6 && c - 1 < 5; c++) {
+                        const val = jsonData[r][c];
+                        if (val && typeof val === 'string') {
+                            state.classData[i].timetable[r - 2][c - 1] = val;
+                        }
+                    }
+                }
+                
+                // 목표시수 읽기
+                const targetRow = jsonData.findIndex(row => row && row[0] === '목표시수');
+                if (targetRow >= 0 && jsonData[targetRow]) {
+                    for (let idx = 0; idx < allSubjects.length && idx + 1 < jsonData[targetRow].length; idx++) {
+                        const val = jsonData[targetRow][idx + 1];
+                        if (typeof val === 'number') {
+                            state.classData[i].targetHours[idx] = val;
+                        }
+                    }
+                }
+                
+                // 메모 읽기
+                const memoRow = jsonData.findIndex(row => row && row[0] === '메모');
+                if (memoRow >= 0 && jsonData[memoRow] && jsonData[memoRow][1]) {
+                    state.classData[i].memo = String(jsonData[memoRow][1]);
+                }
+            }
+            
+            renderAll();
+            alert('엑셀 파일을 성공적으로 불러왔습니다.');
+        } catch (err) {
+            alert('엑셀 파일을 불러오는 중 오류가 발생했습니다: ' + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function updateClassCount(val) {
+    state.classCount = parseInt(val);
+    saveAndRefresh();
+}
+
+function addSubjectSheet() {
+    const name = document.getElementById('newSubName').value;
+    if (!name) return alert("과목을 선택해주세요.");
+    state.subjectSheets.push({ subName: name, memo: "", rules: {} });
+    saveAndRefresh();
+}
+
+function deleteSheet(idx) {
+    if(confirm("해당 교과 고정 설정을 삭제하시겠습니까?")) {
+        state.subjectSheets.splice(idx, 1);
+        saveAndRefresh();
+    }
+}
+
+// 고정 시트 렌더링
+function renderMasterSheets() {
+    const container = document.getElementById('masterSheetsContainer');
+    container.innerHTML = '';
+
+    state.subjectSheets.forEach((sheet, sIdx) => {
+        const div = document.createElement('div');
+        div.className = 'master-sheet';
+        const titleCls = getSubjectClass(sheet.subName);
+        let html = `<h3><span class="${titleCls}">[${sheet.subName}]</span> 전담 고정표 <button class="btn" style="background: #6c757d; font-size: 11px; padding: 3px 8px;" onclick="showGlobalCopyDialog(${sIdx})">글로벌</button> <button class="btn btn-del" onclick="deleteSheet(${sIdx})">삭제</button></h3>`;
+        html += `<table><thead><tr><th>교시</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+        
+        for (let r = 0; r < state.periodCount; r++) {
+            html += `<tr><th>${r+1}</th>`;
+            for (let c = 0; c < 5; c++) {
+                const key = `${r}-${c}`;
+                const selected = sheet.rules[key] || [];
+                html += `<td class="master-td draggable-cell" 
+                            draggable="true"
+                            onclick="showClassSelector(event, ${sIdx}, ${r}, ${c})"
+                            ondragstart="handleMasterDragStart(event, ${sIdx}, ${r}, ${c})"
+                            ondragover="handleMasterDragOver(event)"
+                            ondrop="handleMasterDrop(event, ${sIdx}, ${r}, ${c})"
+                            ondragend="handleMasterDragEnd(event)">
+                            <span class="selected-classes">${selected.length > 0 ? selected.join(',') + '반' : '+'}</span>
+                         </td>`;
+            }
+            html += `</tr>`;
+        }
+        html += `</tbody></table>`;
+        html += `<textarea placeholder="${sheet.subName} 교과 관련 공지/메모..." onchange="updateSheetMemo(${sIdx}, this.value)">${sheet.memo || ""}</textarea>`;
+        div.innerHTML = html;
+        container.appendChild(div);
+    });
+}
+
+function updateSheetMemo(idx, val) {
+    state.subjectSheets[idx].memo = val;
+    saveAndRefresh(false);
+}
+
+// 학급 선택 팝업
+function showClassSelector(event, sIdx, r, c) {
+    event.stopPropagation();
+    const selector = document.getElementById('globalClassSelector');
+    const key = `${r}-${c}`;
+    const selectedClasses = state.subjectSheets[sIdx].rules[key] || [];
+
+    let html = `<strong>대상 학급</strong><hr>`;
+    for (let i = 1; i <= state.classCount; i++) {
+        const checked = selectedClasses.includes(i) ? 'checked' : '';
+        html += `<label><input type="checkbox" value="${i}" ${checked} onchange="toggleRule(${sIdx}, ${r}, ${c}, ${i}, this.checked)"> ${i}반</label>`;
+    }
+    html += `<hr><button class="btn" style="width:100%; font-size:11px;" onclick="closeSelector()">닫기</button>`;
+    
+    selector.innerHTML = html;
+    selector.style.display = 'block';
+    selector.style.left = (event.pageX + 10) + 'px';
+    selector.style.top = (event.pageY + 10) + 'px';
+}
+
+function toggleRule(sIdx, r, c, classNum, isChecked) {
+    const key = `${r}-${c}`;
+    if (!state.subjectSheets[sIdx].rules[key]) state.subjectSheets[sIdx].rules[key] = [];
+    
+    if (isChecked) {
+        if (!state.subjectSheets[sIdx].rules[key].includes(classNum)) state.subjectSheets[sIdx].rules[key].push(classNum);
+    } else {
+        state.subjectSheets[sIdx].rules[key] = state.subjectSheets[sIdx].rules[key].filter(n => n !== classNum);
+    }
+    saveAndRefresh();
+}
+
+function closeSelector() { document.getElementById('globalClassSelector').style.display = 'none'; }
+
+// 과목 선택 팝업
+function showSubjectSelector(event, classNum, r, c) {
+    event.stopPropagation();
+    const selector = document.getElementById('globalSubjectSelector');
+    const cellValue = state.classData[classNum].timetable[r][c] || '';
+
+    let html = `<strong>과목 선택</strong><hr>`;
+    html += `<label><input type="checkbox" value="" ${cellValue === '' ? 'checked' : ''} onchange="updateCellFromCheckbox(${classNum}, ${r}, ${c}, '', this.checked)"> (없음)</label>`;
+    allSubjects.forEach(sub => {
+        const checked = cellValue === sub ? 'checked' : '';
+        html += `<label><input type="checkbox" value="${sub}" ${checked} onchange="updateCellFromCheckbox(${classNum}, ${r}, ${c}, '${sub}', this.checked)"> ${sub}</label>`;
+    });
+    html += `<hr><button class="btn" style="width:100%; font-size:11px;" onclick="closeSubjectSelector()">닫기</button>`;
+    
+    selector.innerHTML = html;
+    selector.style.display = 'block';
+    selector.style.left = (event.pageX + 10) + 'px';
+    selector.style.top = (event.pageY + 10) + 'px';
+}
+
+function updateCellFromCheckbox(classNum, r, c, subject, isChecked) {
+    // 다른 체크박스 모두 해제
+    const checkboxes = document.querySelectorAll('#globalSubjectSelector input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        if (cb.value !== subject) cb.checked = false;
+    });
+    
+    if (isChecked) {
+        state.classData[classNum].timetable[r][c] = subject;
+    } else {
+        state.classData[classNum].timetable[r][c] = '';
+    }
+    
+    // 셀 업데이트
+    const cell = document.getElementById(`cell-${classNum}-${r}-${c}`);
+    if (cell) {
+        const span = cell.querySelector('.selected-subject');
+        if (span) span.textContent = subject || '-';
+        
+        // 색상 클래스 업데이트
+        const oldCls = cell.className.match(/subject-\w+/g);
+        if (oldCls) {
+            oldCls.forEach(cls => cell.classList.remove(cls));
+        }
+        const newCls = getSubjectClass(subject);
+        if (newCls) {
+            cell.classList.add(newCls);
+        }
+    }
+    
+    saveAndRefresh(false);
+    calculateUnifiedStatus(classNum);
+    closeSubjectSelector();
+}
+
+function closeSubjectSelector() { 
+    document.getElementById('globalSubjectSelector').style.display = 'none'; 
+}
+
+// 학급 시간표 렌더링
+function renderClassGrid() {
+    const grid = document.getElementById('classGrid');
+    grid.innerHTML = '';
+
+    for (let i = 1; i <= state.classCount; i++) {
+        if (!state.classData[i]) {
+            state.classData[i] = { timetable: Array(state.periodCount).fill().map(() => Array(5).fill("")), targetHours: Array(allSubjects.length).fill(0), memo: "" };
+        }
+        grid.appendChild(createClassCard(i));
+    }
+    
+    renderUnifiedHoursTable();
+    renderUnifiedMemo();
+}
+
+function createClassCard(num) {
+    const data = state.classData[num];
+    if (!data.memo) data.memo = '';
+    const card = document.createElement('div');
+    card.className = 'class-card';
+    card.id = `card-${num}`;
+    
+    let html = `<h3>${num}반 <button class="btn btn-clear" onclick="clearClassTimetable(${num})">삭제</button> <button class="btn btn-auto" onclick="autoFill(${num})">자동 채우기</button> <span class="badge" id="badge-${num}">완료</span></h3>`;
+    html += `<table><thead><tr><th>교시</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+
+    for (let r = 0; r < state.periodCount; r++) {
+        html += `<tr><th>${r+1}</th>`;
+        for (let c = 0; c < 5; c++) {
+            const key = `${r}-${c}`;
+            let fixedSub = null;
+            state.subjectSheets.forEach(sheet => {
+                if (sheet.rules[key] && sheet.rules[key].includes(num)) fixedSub = sheet.subName;
+            });
+
+            if (fixedSub) {
+                const cls = getSubjectClass(fixedSub);
+                html += `<td class="fixed-cell ${cls}">${fixedSub}</td>`;
+                data.timetable[r][c] = fixedSub;
+            } else {
+                const cellId = `cell-${num}-${r}-${c}`;
+                const cellValue = data.timetable[r][c] || '';
+                const cls = cellValue ? getSubjectClass(cellValue) : '';
+                html += `<td class="subject-cell draggable-cell ${cls}" id="${cellId}" draggable="true" 
+                    onclick="showSubjectSelector(event, ${num}, ${r}, ${c})"
+                    ondragstart="handleDragStart(event, ${num}, ${r}, ${c})"
+                    ondragover="handleDragOver(event)"
+                    ondrop="handleDrop(event, ${num}, ${r}, ${c})"
+                    ondragend="handleDragEnd(event)">
+                    <span class="selected-subject">${cellValue || '-'}</span>
+                </td>`;
+            }
+        }
+        html += `</tr>`;
+    }
+    html += `</tbody></table>`;
+    
+    card.innerHTML = html;
+    setTimeout(() => {
+        calculateUnifiedStatus(num);
+    }, 0);
+    return card;
+}
+
+function updateClassMemo(classNum, val) {
+    if (!state.classData[classNum]) return;
+    state.classData[classNum].memo = val;
+    saveAndRefresh(false);
+}
+
+// 통합 메모창 렌더링
+function renderUnifiedMemo() {
+    const container = document.getElementById('unifiedMemoContent');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <textarea 
+            placeholder="메모를 입력하세요..." 
+            onchange="updateMemo(this.value)"
+            style="width: 600px; max-width: 100%; min-height: 40px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; resize: vertical;">${state.memo || ""}</textarea>
+    `;
+}
+
+function updateMemo(val) {
+    state.memo = val;
+    saveAndRefresh(false);
+}
+
+// 드래그 앤 드롭 함수들
+let dragSource = null;
+
+function handleDragStart(e, classNum, r, c) {
+    const key = `${r}-${c}`;
+    let fixedSub = null;
+    state.subjectSheets.forEach(sheet => {
+        if (sheet.rules[key] && sheet.rules[key].includes(classNum)) fixedSub = sheet.subName;
+    });
+    
+    if (fixedSub) {
+        e.preventDefault();
+        return false;
+    }
+    
+    dragSource = { classNum, r, c, value: state.classData[classNum].timetable[r][c] };
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.classList.add('dragging');
+}
+
+function handleDragOver(e) {
+    if (dragSource) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleDrop(e, classNum, r, c) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    if (!dragSource) return;
+    
+    const source = dragSource;
+    const targetKey = `${r}-${c}`;
+    
+    // 고정된 셀인지 확인
+    let targetFixed = false;
+    state.subjectSheets.forEach(sheet => {
+        if (sheet.rules[targetKey] && sheet.rules[targetKey].includes(classNum)) targetFixed = true;
+    });
+    
+    if (targetFixed || source.classNum !== classNum) return;
+    
+    // 값 교환
+    const sourceValue = state.classData[classNum].timetable[source.r][source.c];
+    const targetValue = state.classData[classNum].timetable[r][c];
+    
+    state.classData[classNum].timetable[source.r][source.c] = targetValue;
+    state.classData[classNum].timetable[r][c] = sourceValue;
+    
+    // 색상 클래스 업데이트
+    const sourceCell = document.getElementById(`cell-${classNum}-${source.r}-${source.c}`);
+    const targetCell = document.getElementById(`cell-${classNum}-${r}-${c}`);
+    
+    if (sourceCell) {
+        const oldCls = sourceCell.className.match(/subject-\w+/g);
+        if (oldCls) oldCls.forEach(cls => sourceCell.classList.remove(cls));
+        const newCls = getSubjectClass(targetValue);
+        if (newCls) sourceCell.classList.add(newCls);
+        const span = sourceCell.querySelector('.selected-subject');
+        if (span) span.textContent = targetValue || '-';
+    }
+    
+    if (targetCell) {
+        const oldCls = targetCell.className.match(/subject-\w+/g);
+        if (oldCls) oldCls.forEach(cls => targetCell.classList.remove(cls));
+        const newCls = getSubjectClass(sourceValue);
+        if (newCls) targetCell.classList.add(newCls);
+        const span = targetCell.querySelector('.selected-subject');
+        if (span) span.textContent = sourceValue || '-';
+    }
+    
+    saveAndRefresh();
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragSource = null;
+}
+
+// 전담 고정표 드래그 앤 드롭 함수들
+let masterDragSource = null;
+
+function handleMasterDragStart(e, sIdx, r, c) {
+    const key = `${r}-${c}`;
+    const selected = state.subjectSheets[sIdx].rules[key] || [];
+    
+    masterDragSource = { sIdx, r, c, selected: [...selected] };
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.classList.add('dragging');
+}
+
+function handleMasterDragOver(e) {
+    if (masterDragSource) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleMasterDrop(e, sIdx, r, c) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('drag-over');
+    
+    if (!masterDragSource) return;
+    
+    const source = masterDragSource;
+    
+    // 같은 시트 내에서만 드래그 앤 드롭 가능
+    if (source.sIdx !== sIdx) return;
+    
+    const sourceKey = `${source.r}-${source.c}`;
+    const targetKey = `${r}-${c}`;
+    
+    // rules 교환
+    const sourceRules = state.subjectSheets[sIdx].rules[sourceKey] || [];
+    const targetRules = state.subjectSheets[sIdx].rules[targetKey] || [];
+    
+    state.subjectSheets[sIdx].rules[sourceKey] = [...targetRules];
+    state.subjectSheets[sIdx].rules[targetKey] = [...sourceRules];
+    
+    // 빈 배열이면 키 삭제
+    if (state.subjectSheets[sIdx].rules[sourceKey].length === 0) {
+        delete state.subjectSheets[sIdx].rules[sourceKey];
+    }
+    if (state.subjectSheets[sIdx].rules[targetKey].length === 0) {
+        delete state.subjectSheets[sIdx].rules[targetKey];
+    }
+    
+    saveAndRefresh();
+}
+
+function handleMasterDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.master-td.drag-over').forEach(el => el.classList.remove('drag-over'));
+    masterDragSource = null;
+}
+
+function updateCell(classNum, r, c, val) {
+    state.classData[classNum].timetable[r][c] = val;
+    saveAndRefresh(false);
+    calculateStatus(classNum);
+}
+
+function updateHour(classNum, idx, val) {
+    // 목표시수는 모든 반에 동일하게 적용 (1반 것만 사용)
+    const targetValue = parseInt(val) || 0;
+    for (let i = 1; i <= state.classCount; i++) {
+        if (state.classData[i]) {
+            state.classData[i].targetHours[idx] = targetValue;
+        }
+    }
+    saveAndRefresh(false);
+    // 목표시수 합계 업데이트
+    updateTargetHoursSum();
+    // 모든 반의 달성도 재계산
+    for (let i = 1; i <= state.classCount; i++) {
+        if (state.classData[i]) {
+            calculateUnifiedStatus(i);
+        }
+    }
+}
+
+// 자동 채우기 로직 (선호교시 고려)
+function autoFill(num) {
+    const data = state.classData[num];
+    const needed = [];
+
+    // 1. 각 과목별로 더 채워야 할 개수 리스트업 (1반의 목표시수 사용)
+    const targetHoursRef = state.classData[1] ? state.classData[1].targetHours : data.targetHours;
+    allSubjects.forEach((sub, idx) => {
+        let count = 0;
+        for(let r=0; r<state.periodCount; r++) {
+            for(let c=0; c<5; c++) {
+                const key = `${r}-${c}`;
+                let fixed = false;
+                state.subjectSheets.forEach(sheet => { if(sheet.rules[key] && sheet.rules[key].includes(num)) fixed=true; });
+                if(fixed) { 
+                    let fixedName = "";
+                    state.subjectSheets.forEach(sheet => { if(sheet.rules[key] && sheet.rules[key].includes(num)) fixedName = sheet.subName; });
+                    if(fixedName === sub) count++;
+                } else if(data.timetable[r][c] === sub) count++;
+            }
+        }
+        let diff = targetHoursRef[idx] - count;
+        for(let k=0; k<diff; k++) needed.push({sub, idx});
+    });
+
+    // 2. 비어있는(활성화된) 칸 찾기 (선호교시 우선순위 적용)
+    const emptySlots = [];
+    for(let r=0; r<state.periodCount; r++) {
+        for(let c=0; c<5; c++) {
+            const key = `${r}-${c}`;
+            let fixed = false;
+            state.subjectSheets.forEach(sheet => { if(sheet.rules[key] && sheet.rules[key].includes(num)) fixed=true; });
+            if(!fixed && data.timetable[r][c] === "") {
+                emptySlots.push({r, c, period: r+1});
+            }
+        }
+    }
+
+    // 3. 선호교시를 고려한 배치
+    // 선호교시가 있는 과목을 먼저 배치
+    const preferred = [];
+    const nonPreferred = [];
+    
+    needed.forEach(item => {
+        const prefs = state.preferences[item.sub] || [];
+        if (prefs.length > 0) {
+            preferred.push(item);
+        } else {
+            nonPreferred.push(item);
+        }
+    });
+    
+    // 선호교시가 있는 과목 배치
+    preferred.forEach(item => {
+        const prefs = state.preferences[item.sub] || [];
+        const availableSlots = emptySlots.filter(slot => prefs.includes(slot.period));
+        if (availableSlots.length > 0) {
+            const slot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+            data.timetable[slot.r][slot.c] = item.sub;
+            const idx = emptySlots.findIndex(s => s.r === slot.r && s.c === slot.c);
+            if (idx >= 0) emptySlots.splice(idx, 1);
+        }
+    });
+    
+    // 나머지 과목 랜덤 배치 (1반의 목표시수 사용)
+    const remaining = [...preferred, ...nonPreferred].filter(item => {
+        let count = 0;
+        for(let r=0; r<state.periodCount; r++) {
+            for(let c=0; c<5; c++) {
+                const key = `${r}-${c}`;
+                let fixedSub = null;
+                state.subjectSheets.forEach(sheet => { 
+                    if (sheet.rules[key] && sheet.rules[key].includes(num)) fixedSub = sheet.subName; 
+                });
+                const currentVal = fixedSub || data.timetable[r][c];
+                if(currentVal === item.sub) count++;
+            }
+        }
+        return count < targetHoursRef[item.idx];
+    });
+    
+    remaining.sort(() => Math.random() - 0.5);
+    emptySlots.forEach((slot, i) => {
+        if(remaining[i]) data.timetable[slot.r][slot.c] = remaining[i].sub;
+    });
+
+    saveAndRefresh();
+}
+
+function calculateStatus(classNum) {
+    // 통합 표의 달성도 계산 함수 사용
+    calculateUnifiedStatus(classNum);
+}
+
+function renderAll() { 
+    renderMasterSheets(); 
+    renderClassGrid(); 
+    renderUnifiedHoursTable();
+    updateWeekPeriodInfo();
+}
+
+// 통합 주간 시수 및 달성도 표 렌더링
+function renderUnifiedHoursTable() {
+    const container = document.getElementById('unifiedHoursTable');
+    if (!container) return;
+    
+    // 1반 데이터 사용 (없으면 첫 번째 학급)
+    const firstClass = state.classData[1] || state.classData[Object.keys(state.classData)[0]];
+    if (!firstClass) {
+        container.innerHTML = '<p>학급 데이터가 없습니다.</p>';
+        return;
+    }
+    
+    let html = '<table><thead><tr><th>구분</th>';
+    html += allSubjects.map(s => `<th>${s}</th>`).join('');
+    html += '<th>합계</th></tr></thead><tbody>';
+    
+    // 행1: 목표시수 (1반 것 사용)
+    html += '<tr id="target-hours-row"><th>목표시수</th>';
+    html += allSubjects.map((s, idx) => {
+        return `<td><input type="number" value="${firstClass.targetHours[idx]}" style="width:100%" onchange="updateHour(1, ${idx}, this.value)"></td>`;
+    }).join('');
+    html += '<td id="target-hours-sum" style="font-weight:bold">0</td>';
+    html += '</tr>';
+    
+    // 각 반의 달성도 행
+    for (let i = 1; i <= state.classCount; i++) {
+        if (!state.classData[i]) continue;
+        const remainId = `unified-remain-${i}`;
+        html += `<tr id="${remainId}" style="font-weight:bold"><th>${i}반</th>`;
+        html += allSubjects.map(() => `<td>0</td>`).join('');
+        html += `<td id="remain-sum-${i}" style="font-weight:bold">0</td>`;
+        html += '</tr>';
+    }
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    
+    // 목표시수 합계 계산
+    updateTargetHoursSum();
+    
+    // 각 반의 달성도 계산
+    for (let i = 1; i <= state.classCount; i++) {
+        if (state.classData[i]) {
+            calculateUnifiedStatus(i);
+        }
+    }
+}
+
+function calculateUnifiedStatus(classNum) {
+    const data = state.classData[classNum];
+    const remainRow = document.getElementById(`unified-remain-${classNum}`);
+    if (!remainRow) return;
+    
+    const cells = remainRow.cells;
+    let allDone = true;
+    let sum = 0;
+
+    allSubjects.forEach((sub, idx) => {
+        let count = 0;
+        for(let r=0; r<state.periodCount; r++) {
+            for(let c=0; c<5; c++) {
+                const key = `${r}-${c}`;
+                let fixedSub = null;
+                state.subjectSheets.forEach(sheet => { 
+                    if (sheet.rules[key] && sheet.rules[key].includes(classNum)) fixedSub = sheet.subName; 
+                });
+                const currentVal = fixedSub || data.timetable[r][c];
+                if(currentVal === sub) count++;
+            }
+        }
+        const target = state.classData[1] ? state.classData[1].targetHours[idx] : data.targetHours[idx];
+        const remain = target - count;
+        sum += remain;
+        if (cells[idx + 1]) {
+            cells[idx + 1].innerText = remain;
+            // 모든 과목에 동일하게 적용: 목표시수가 0보다 크고 달성도가 0이면 색 변경
+            if(target > 0 && remain === 0) {
+                cells[idx + 1].className = 'target-zero';
+            } else { 
+                cells[idx + 1].className = ''; 
+                if(remain !== 0) allDone = false; 
+            }
+        }
+    });
+    
+    // 합계 업데이트
+    const sumCell = document.getElementById(`remain-sum-${classNum}`);
+    if (sumCell) {
+        sumCell.innerText = sum;
+    }
+    
+    // 카드의 완료 상태도 업데이트
+    const card = document.getElementById(`card-${classNum}`);
+    const badge = document.getElementById(`badge-${classNum}`);
+    if (card && badge) {
+        badge.style.display = allDone ? 'inline' : 'none';
+        card.classList.toggle('completed', allDone);
+    }
+}
+
+// 목표시수 합계 계산
+function updateTargetHoursSum() {
+    const firstClass = state.classData[1];
+    if (!firstClass) return;
+    
+    const sum = firstClass.targetHours.reduce((a, b) => a + b, 0);
+    const sumCell = document.getElementById('target-hours-sum');
+    if (sumCell) {
+        sumCell.innerText = sum;
+    }
+}
+
+// 연간시수표 데이터 선택 함수
+function loadAnnualData() {
+    const semester = '2'; // 2학기 고정
+    const loginInfoStr = localStorage.getItem('timetable_login');
+    
+    if (!loginInfoStr) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    let loginInfo;
+    try {
+        loginInfo = JSON.parse(loginInfoStr);
+    } catch (e) {
+        alert('로그인 정보를 불러올 수 없습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    const nickname = loginInfo.nickname;
+    if (!nickname) {
+        alert('로그인 정보가 올바르지 않습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${semester}`)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.message || `HTTP ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (!result.success) {
+                throw new Error(result.message || '데이터를 불러올 수 없습니다.');
+            }
+            
+            const data = result.data || [];
+            state.annualTableData = data;
+            
+            // 주 선택 컨테이너 표시
+            const weekContainer = document.getElementById('weekSelectorContainer');
+            
+            if (data && data.length > 0) {
+                // 첫 번째 주로 초기화
+                currentWeekIndex = 0;
+                
+                // 첫 번째 주의 데이터 불러오기
+                loadWeekDataFromStorage(currentWeekIndex);
+                
+                // 화면 업데이트
+                updateAnnualWeekDisplay();
+                renderAll();
+                
+                // 목표시수 데이터 불러오기
+                loadWeekData();
+                
+                weekContainer.style.display = 'flex';
+                alert(`${semester}학기 데이터가 성공적으로 선택되었습니다.`);
+            } else {
+                weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
+                weekContainer.style.display = 'flex';
+            }
+        })
+        .catch(error => {
+            alert(`오류: ${error.message}\n\n서버에서 실행 중인지 확인하세요.`);
+            console.error('연간시수표 로드 오류:', error);
+        });
+}
+
+// 현재 선택된 주 인덱스
+let currentWeekIndex = -1;
+
+// 주 변경 함수 (화살표 버튼용)
+function changeWeek(direction) {
+    if (!state.annualTableData || state.annualTableData.length === 0) return;
+    
+    const newIndex = currentWeekIndex + direction;
+    
+    // 범위 체크
+    if (newIndex < 0 || newIndex >= state.annualTableData.length) return;
+    
+    // 현재 주의 데이터 저장
+    if (currentWeekIndex >= 0) {
+        saveCurrentWeekData();
+    }
+    
+    // 새 주로 변경
+    currentWeekIndex = newIndex;
+    
+    // 새 주의 데이터 불러오기
+    loadWeekDataFromStorage(currentWeekIndex);
+    
+    // 화면 업데이트
+    updateAnnualWeekDisplay();
+    renderAll();
+    
+    // 목표시수 데이터 불러오기
+    loadWeekData();
+}
+
+// 연간시수표 주 표시 업데이트
+function updateAnnualWeekDisplay() {
+    const annualWeekDisplay = document.getElementById('annualWeekDisplay');
+    if (!annualWeekDisplay || !state.annualTableData || currentWeekIndex < 0) return;
+    
+    // "1주", "2주" 형식으로 표시
+    annualWeekDisplay.textContent = `${currentWeekIndex + 1}주`;
+}
+
+// 주 선택 시 해당 주의 데이터 불러오기
+function loadWeekData() {
+    if (currentWeekIndex < 0 || !state.annualTableData) return;
+    
+    const weekData = state.annualTableData[currentWeekIndex];
+    if (!weekData) return;
+    
+    // 기간 표시
+    const periodDisplay = document.getElementById('periodDisplay');
+    if (weekData['기간']) {
+        periodDisplay.textContent = `기간: ${weekData['기간']}`;
+    }
+    
+    // 주와 기간 정보 업데이트
+    updateWeekPeriodInfo();
+    
+    // 과목별 목표시수 매핑 (JSON 필드 -> allSubjects 인덱스)
+    const subjectMapping = {
+        '국어': 0,
+        '사회': 1,
+        '도덕': 2,
+        '수학': 3,
+        '과학': 4,
+        '실과': 5,
+        '체육': 6,
+        '음악': 7,
+        '미술': 8,
+        '영어': 9,
+        '자율': 10,  // 창체(자)
+        '동아리': 11,  // 창체(동)
+        '봉사': 12,   // 창체(봉)
+        '진로': 13    // 창체(진)
+    };
+    
+    // 목표시수 업데이트
+    Object.keys(subjectMapping).forEach(subjectKey => {
+        const idx = subjectMapping[subjectKey];
+        const value = parseInt(weekData[subjectKey]) || 0;
+        
+        // 모든 반의 목표시수 업데이트
+        for (let i = 1; i <= state.classCount; i++) {
+            if (state.classData[i]) {
+                state.classData[i].targetHours[idx] = value;
+            }
+        }
+    });
+    
+    // 통합 표 다시 렌더링하여 목표시수 반영
+    renderUnifiedHoursTable();
+    
+    // localStorage에 저장
+    saveAndRefresh(false);
+}
+
+// 학급 시간표 삭제 함수
+function clearClassTimetable(classNum) {
+    if (!confirm(`${classNum}반의 시간표를 모두 삭제하시겠습니까?\n고정된 교과는 삭제되지 않습니다.`)) {
+        return;
+    }
+    
+    const data = state.classData[classNum];
+    if (!data) return;
+    
+    // 고정된 교과를 제외하고 모든 셀 비우기
+    for (let r = 0; r < state.periodCount; r++) {
+        for (let c = 0; c < 5; c++) {
+            const key = `${r}-${c}`;
+            let isFixed = false;
+            state.subjectSheets.forEach(sheet => {
+                if (sheet.rules[key] && sheet.rules[key].includes(classNum)) {
+                    isFixed = true;
+                }
+            });
+            
+            if (!isFixed) {
+                data.timetable[r][c] = '';
+            }
+        }
+    }
+    
+    saveAndRefresh();
+    
+    // 통합 표의 달성도 재계산
+    calculateUnifiedStatus(classNum);
+    
+    // 카드 다시 렌더링
+    const card = document.getElementById(`card-${classNum}`);
+    if (card) {
+        const grid = document.getElementById('classGrid');
+        const newCard = createClassCard(classNum);
+        grid.replaceChild(newCard, card);
+    }
+}
+// 글로벌 복사 다이얼로그 표시
+function showGlobalCopyDialog(sheetIdx) {
+    if (!state.annualTableData || state.annualTableData.length === 0) {
+        alert('연간시수표 데이터를 먼저 로드해주세요.');
+        return;
+    }
+    
+    const maxWeek = state.annualTableData.length;
+    const startWeek = prompt(`복사할 시작 주를 입력하세요 (1~${maxWeek}):`, '1');
+    if (!startWeek) return;
+    
+    const endWeek = prompt(`복사할 끝 주를 입력하세요 (${startWeek}~${maxWeek}):`, String(maxWeek));
+    if (!endWeek) return;
+    
+    const start = parseInt(startWeek) - 1; // 인덱스로 변환
+    const end = parseInt(endWeek) - 1;
+    
+    if (isNaN(start) || isNaN(end) || start < 0 || end >= maxWeek || start > end) {
+        alert('올바른 주 범위를 입력해주세요.');
+        return;
+    }
+    
+    if (confirm(`${startWeek}주부터 ${endWeek}주까지 전담 고정표를 복사하시겠습니까?`)) {
+        copySheetToWeeks(sheetIdx, start, end);
+    }
+}
+
+// 전담 고정표를 여러 주에 복사
+function copySheetToWeeks(sheetIdx, startWeekIdx, endWeekIdx) {
+    const sheet = state.subjectSheets[sheetIdx];
+    if (!sheet) return;
+    
+    // 현재 주의 데이터를 주별 데이터에 저장
+    if (currentWeekIndex >= 0) {
+        saveCurrentWeekData();
+    }
+    
+    // 각 주에 복사
+    for (let weekIdx = startWeekIdx; weekIdx <= endWeekIdx; weekIdx++) {
+        if (!state.weeklyData2) state.weeklyData2 = {};
+        if (!state.weeklyData2[weekIdx]) {
+            state.weeklyData2[weekIdx] = {
+                subjectSheets: [],
+                classData: {}
+            };
+        }
+        
+        // 해당 주의 subjectSheets 배열에서 같은 과목 찾기
+        const weekSheets = state.weeklyData2[weekIdx].subjectSheets;
+        const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName);
+        
+        // 복사할 데이터 준비
+        const copiedSheet = {
+            subName: sheet.subName,
+            memo: sheet.memo,
+            rules: JSON.parse(JSON.stringify(sheet.rules))
+        };
+        
+        if (existingIdx >= 0) {
+            // 기존 시트 교체
+            weekSheets[existingIdx] = copiedSheet;
+        } else {
+            // 새 시트 추가
+            weekSheets.push(copiedSheet);
+        }
+    }
+    
+    // 서버에 저장
+    saveDataToServer();
+    
+    alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 복사가 완료되었습니다.`);
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.class-selector') && !e.target.closest('.master-td')) {
+        closeSelector();
+    }
+    if (!e.target.closest('.subject-selector') && !e.target.closest('.subject-cell')) {
+        closeSubjectSelector();
+    }
+});
+
+// 전담 고정표 드래그 중 클릭 이벤트 방지
+document.addEventListener('dragstart', function(e) {
+    if (e.target.closest('.master-td')) {
+        // 드래그 중에는 클릭 이벤트 방지
+        const masterTd = e.target.closest('.master-td');
+        if (masterTd) {
+            masterTd.style.pointerEvents = 'none';
+        }
+    }
+});
+
+document.addEventListener('dragend', function(e) {
+    if (e.target.closest('.master-td')) {
+        const masterTd = e.target.closest('.master-td');
+        if (masterTd) {
+            masterTd.style.pointerEvents = '';
+        }
+    }
+});
+init();
+</script>
+
+</body>
+</html>

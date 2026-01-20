@@ -1,0 +1,15 @@
+{
+  "name": "timetable-server",
+  "version": "1.0.0",
+  "description": "시간표 관리 시스템 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["timetable", "server"],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
