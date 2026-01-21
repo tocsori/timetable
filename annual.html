@@ -126,7 +126,8 @@ const subjectMapping = {
 
 const headerColumns = ['주', '기간', '수업일수', '국어', '사회', '도덕', '수학', '과학', '실과', '체육', '음악', '미술', '영어', '자율', '동아리', '봉사', '진로', '계'];
 
-let currentSemester = '1'; // 현재 선택된 학기
+// localStorage에서 마지막 선택 학기 불러오기, 없으면 기본값 '1'
+let currentSemester = localStorage.getItem('annual_semester') || '1';
 
 function init() {
     // 로그인 체크
@@ -198,6 +199,9 @@ function loadAnnualDataFromServer() {
 
 function switchSemester(semester) {
     currentSemester = semester;
+    
+    // localStorage에 선택한 학기 저장
+    localStorage.setItem('annual_semester', semester);
     
     // 버튼 활성화 상태 업데이트
     const btn1 = document.getElementById('semester1Btn');
