@@ -225,26 +225,62 @@ async function saveUserData(nickname, data) {
 
 // 연간시수표 데이터 저장 (PostgreSQL 또는 파일 시스템)
 async function saveAnnualData(nickname, semester, annualData) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:227',message:'saveAnnualData entry',data:{nickname,semester,hasDbClient:!!dbClient,annualDataType:typeof annualData,annualDataIsArray:Array.isArray(annualData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     if (dbClient) {
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:230',message:'PostgreSQL path - before stringify',data:{nickname,semester},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             const dataJson = JSON.stringify(annualData);
             const columnName = semester === '1' ? 'annual_data_1' : 'annual_data_2';
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:233',message:'PostgreSQL path - before query',data:{nickname,semester,columnName,dataJsonLength:dataJson.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
+            // 먼저 user_data 레코드가 존재하는지 확인하고, 없으면 생성
+            const checkResult = await dbClient.query('SELECT nickname FROM user_data WHERE nickname = $1', [nickname]);
+            if (checkResult.rows.length === 0) {
+                // 레코드가 없으면 data 컬럼에 빈 객체를 넣어서 생성
+                await dbClient.query(
+                    'INSERT INTO user_data (nickname, data) VALUES ($1, $2)',
+                    [nickname, '{}']
+                );
+            }
             await dbClient.query(
-                `INSERT INTO user_data (nickname, ${columnName}) VALUES ($1, $2) ON CONFLICT (nickname) DO UPDATE SET ${columnName} = $2, updated_at = CURRENT_TIMESTAMP`,
-                [nickname, dataJson]
+                `UPDATE user_data SET ${columnName} = $1, updated_at = CURRENT_TIMESTAMP WHERE nickname = $2`,
+                [dataJson, nickname]
             );
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:245',message:'PostgreSQL path - query success',data:{nickname,semester},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             return true;
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:247',message:'PostgreSQL path - error',data:{nickname,semester,errorMessage:error.message,errorCode:error.code,errorDetail:error.detail},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error('연간시수표 데이터 저장 오류:', error);
             return false;
         }
     } else {
         try {
-            const annualFilePath = path.join(DATA_DIR, `${nickname}_annual_${semester}.json`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:252',message:'File system path - before ensureDataDir',data:{nickname,semester,DATA_DIR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             ensureDataDir();
+            const annualFilePath = path.join(DATA_DIR, `${nickname}_annual_${semester}.json`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:255',message:'File system path - before writeFileSync',data:{nickname,semester,annualFilePath,dirExists:fs.existsSync(DATA_DIR)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
             fs.writeFileSync(annualFilePath, JSON.stringify(annualData, null, 2), 'utf8');
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:257',message:'File system path - writeFileSync success',data:{nickname,semester,annualFilePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             return true;
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:259',message:'File system path - error',data:{nickname,semester,errorMessage:error.message,errorCode:error.code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             console.error('연간시수표 파일 저장 오류:', error);
             return false;
         }
@@ -623,10 +659,19 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         });
         req.on('end', async () => {
             try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:625',message:'API POST /api/annual-data - before parse',data:{bodyLength:body.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 const data = JSON.parse(body);
                 const { nickname, semester, annualData } = data;
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:628',message:'API POST /api/annual-data - after parse',data:{nickname,semester,hasAnnualData:!!annualData,annualDataType:typeof annualData,annualDataIsArray:Array.isArray(annualData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
 
                 if (!nickname || !semester || !annualData) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:631',message:'API POST - validation failed',data:{nickname:!!nickname,semester:!!semester,annualData:!!annualData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
                     res.writeHead(400);
                     res.end(JSON.stringify({ success: false, message: '닉네임, 학기, 데이터가 필요합니다.' }));
                     return;
@@ -640,7 +685,11 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
 
                 console.log(`[연간시수표 데이터 저장] 닉네임: ${nickname}, 학기: ${semester}`);
 
-                if (await saveAnnualData(nickname, semester, annualData)) {
+                const saveResult = await saveAnnualData(nickname, semester, annualData);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:643',message:'API POST - saveAnnualData result',data:{nickname,semester,saveResult},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                if (saveResult) {
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: '연간시수표 데이터가 저장되었습니다.' }));
                 } else {
@@ -648,6 +697,9 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     res.end(JSON.stringify({ success: false, message: '연간시수표 데이터 저장 중 오류가 발생했습니다.' }));
                 }
             } catch (error) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2ae70c89-3e54-4e0a-97f2-b15d8970d568',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:651',message:'API POST - catch error',data:{errorMessage:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 console.error('연간시수표 데이터 저장 오류:', error);
                 res.writeHead(400);
                 res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
