@@ -307,22 +307,24 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
 
     // 계정 목록 조회 API (관리용)
     if (pathname === '/api/accounts' && method === 'GET') {
-        try {
-            const accounts = await getAccounts();
-            // 비밀번호 제외하고 반환
-            const safeAccounts = accounts.map(acc => ({
-                schoolName: acc.schoolName,
-                grade: acc.grade,
-                nickname: acc.nickname,
-                createdAt: acc.createdAt
-            }));
-            res.writeHead(200);
-            res.end(JSON.stringify({ success: true, accounts: safeAccounts }));
-        } catch (error) {
-            console.error('계정 목록 조회 오류:', error);
-            res.writeHead(500);
-            res.end(JSON.stringify({ success: false, message: '계정 목록 조회 중 오류가 발생했습니다.' }));
-        }
+        (async () => {
+            try {
+                const accounts = await getAccounts();
+                // 비밀번호 제외하고 반환
+                const safeAccounts = accounts.map(acc => ({
+                    schoolName: acc.schoolName,
+                    grade: acc.grade,
+                    nickname: acc.nickname,
+                    createdAt: acc.createdAt
+                }));
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, accounts: safeAccounts }));
+            } catch (error) {
+                console.error('계정 목록 조회 오류:', error);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: '계정 목록 조회 중 오류가 발생했습니다.' }));
+            }
+        })();
         return;
     }
 
@@ -335,33 +337,35 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             return;
         }
 
-        try {
-            const data = await getUserData(nickname);
-            if (data) {
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, data: data }));
-            } else {
-                // 데이터가 없으면 초기 데이터 반환
-                res.writeHead(200);
-                res.end(JSON.stringify({ 
-                    success: true, 
-                    data: {
-                        classCount: 3,
-                        periodCount: 7,
-                        subjectSheets: [],
-                        classData: {},
-                        preferences: {},
-                        currentWeek: new Date().toISOString(),
-                        annualHours: {},
-                        weeklyData: {}
-                    }
-                }));
+        (async () => {
+            try {
+                const data = await getUserData(nickname);
+                if (data) {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: data }));
+                } else {
+                    // 데이터가 없으면 초기 데이터 반환
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ 
+                        success: true, 
+                        data: {
+                            classCount: 3,
+                            periodCount: 7,
+                            subjectSheets: [],
+                            classData: {},
+                            preferences: {},
+                            currentWeek: new Date().toISOString(),
+                            annualHours: {},
+                            weeklyData: {}
+                        }
+                    }));
+                }
+            } catch (error) {
+                console.error('데이터 불러오기 오류:', error);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: '데이터 불러오기 중 오류가 발생했습니다.' }));
             }
-        } catch (error) {
-            console.error('데이터 불러오기 오류:', error);
-            res.writeHead(500);
-            res.end(JSON.stringify({ success: false, message: '데이터 불러오기 중 오류가 발생했습니다.' }));
-        }
+        })();
         return;
     }
 
@@ -409,22 +413,24 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             return;
         }
 
-        try {
-            const userData = await getUserData(nickname);
-            if (userData) {
-                const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-                const annualData = userData[key] || [];
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, data: annualData }));
-            } else {
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, data: [] }));
+        (async () => {
+            try {
+                const userData = await getUserData(nickname);
+                if (userData) {
+                    const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
+                    const annualData = userData[key] || [];
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: annualData }));
+                } else {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: [] }));
+                }
+            } catch (error) {
+                console.error('연간시수표 불러오기 오류:', error);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다.' }));
             }
-        } catch (error) {
-            console.error('연간시수표 불러오기 오류:', error);
-            res.writeHead(500);
-            res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다.' }));
-        }
+        })();
         return;
     }
 
