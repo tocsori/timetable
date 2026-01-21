@@ -149,7 +149,11 @@ function init() {
         btn2.classList.add('active');
     }
     
-    loadAnnualDataFromServer();
+    // 페이지 로드 시 데이터 불러오기 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
+    setTimeout(() => {
+        loadAnnualDataFromServer();
+    }, 100);
+    
     setupCSVLoader();
 }
 
@@ -157,6 +161,7 @@ function init() {
 function loadAnnualDataFromServer() {
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
+        console.log('[연간시수표] 로그인 정보 없음');
         renderAnnualTable([]);
         return;
     }
@@ -165,34 +170,47 @@ function loadAnnualDataFromServer() {
     try {
         loginInfo = JSON.parse(loginInfoStr);
     } catch (e) {
+        console.error('[연간시수표] 로그인 정보 파싱 오류:', e);
         renderAnnualTable([]);
         return;
     }
     
     const nickname = loginInfo.nickname;
     if (!nickname) {
+        console.log('[연간시수표] 닉네임 없음');
         renderAnnualTable([]);
         return;
     }
     
+    console.log(`[연간시수표 불러오기 시작] 닉네임: ${nickname}, 학기: ${currentSemester}`);
+    
     fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${currentSemester}`)
         .then(response => {
+            console.log(`[연간시수표] 서버 응답 상태: ${response.status}`);
             if (!response.ok) {
                 return response.json().then(err => {
+                    console.error(`[연간시수표] 서버 오류: ${err.message || `HTTP ${response.status}`}`);
                     throw new Error(err.message || `HTTP ${response.status}`);
                 });
             }
             return response.json();
         })
         .then(result => {
+            console.log(`[연간시수표] 서버 응답 결과:`, result);
             if (result.success && result.data) {
+                console.log(`[연간시수표 불러오기 성공] 학기: ${currentSemester}, 데이터 행 수: ${result.data.length}`);
+                if (result.data.length > 0) {
+                    console.log(`[연간시수표] 첫 번째 행 데이터:`, result.data[0]);
+                }
                 renderAnnualTable(result.data);
             } else {
+                console.log(`[연간시수표 불러오기] 학기: ${currentSemester}, 데이터 없음 (success: ${result.success})`);
                 renderAnnualTable([]);
             }
         })
         .catch(error => {
-            console.error('연간시수표 불러오기 오류:', error);
+            console.error('[연간시수표 불러오기 오류]', error);
+            console.error('[연간시수표] 오류 상세:', error.stack);
             renderAnnualTable([]);
         });
 }
@@ -573,14 +591,19 @@ function applyCSVToAnnualTable(rows) {
     })
     .then(result => {
         if (result.success) {
+            console.log(`[CSV 저장 성공] 학기: ${currentSemester}, 저장된 데이터 행 수: ${tableData.length}`);
             alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었고 서버에 저장되었습니다.`);
-            loadAnnualDataFromServer();
+            // 저장 후 서버에서 다시 불러오기 (약간의 지연을 두어 저장이 완전히 완료된 후 불러오기)
+            setTimeout(() => {
+                loadAnnualDataFromServer();
+            }, 300);
         } else {
+            console.error(`[CSV 저장 실패] 학기: ${currentSemester}, 오류: ${result.message}`);
             alert('저장 중 오류가 발생했습니다: ' + result.message);
         }
     })
     .catch(error => {
-        console.error('CSV 저장 오류:', error);
+        console.error('[CSV 저장 오류]', error);
         alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
     });
 }
@@ -672,15 +695,19 @@ function saveAnnualHours() {
     })
     .then(result => {
         if (result.success) {
+            console.log(`[연간시수표 저장 성공] 학기: ${currentSemester}, 저장된 데이터 행 수: ${tableData.length}`);
             alert(`${currentSemester}학기 연간시수표가 서버에 저장되었습니다.`);
-            // 저장 후 서버에서 다시 불러오기
-            loadAnnualDataFromServer();
+            // 저장 후 서버에서 다시 불러오기 (약간의 지연을 두어 저장이 완전히 완료된 후 불러오기)
+            setTimeout(() => {
+                loadAnnualDataFromServer();
+            }, 300);
         } else {
+            console.error(`[연간시수표 저장 실패] 학기: ${currentSemester}, 오류: ${result.message}`);
             alert('저장 중 오류가 발생했습니다: ' + result.message);
         }
     })
     .catch(error => {
-        console.error('저장 오류:', error);
+        console.error('[연간시수표 저장 오류]', error);
         alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
     });
 }
@@ -702,7 +729,24 @@ function addRow() {
     addTotalRow();
 }
 
-init();
+// 페이지 로드 완료 후 초기화
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    // DOM이 이미 로드된 경우
+    init();
+}
+
+// 페이지 표시 시 데이터 다시 불러오기 (브라우저 뒤로가기 등)
+window.addEventListener('pageshow', function(event) {
+    if (event.persisted) {
+        // 페이지가 캐시에서 복원된 경우
+        console.log('[연간시수표] 페이지 복원, 데이터 다시 불러오기');
+        setTimeout(() => {
+            loadAnnualDataFromServer();
+        }, 100);
+    }
+});
 </script>
 
 </body>
