@@ -328,6 +328,88 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         return;
     }
 
+    // 계정 정보 수정 API
+    if (pathname === '/api/accounts/update' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { nickname, schoolName, grade, currentPassword, newPassword } = data;
+
+                if (!nickname || !schoolName || !grade) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '필수 정보가 누락되었습니다.' }));
+                    return;
+                }
+
+                const accounts = await getAccounts();
+                const accountIndex = accounts.findIndex(acc => acc.nickname === nickname);
+
+                if (accountIndex === -1) {
+                    res.writeHead(404);
+                    res.end(JSON.stringify({ success: false, message: '계정을 찾을 수 없습니다.' }));
+                    return;
+                }
+
+                // 비밀번호 변경이 요청된 경우
+                if (newPassword) {
+                    if (!currentPassword) {
+                        res.writeHead(400);
+                        res.end(JSON.stringify({ success: false, message: '기존 비밀번호를 입력해주세요.' }));
+                        return;
+                    }
+                    
+                    // 기존 비밀번호 확인
+                    if (accounts[accountIndex].password !== currentPassword) {
+                        res.writeHead(401);
+                        res.end(JSON.stringify({ success: false, message: '기존 비밀번호가 일치하지 않습니다.' }));
+                        return;
+                    }
+                    
+                    accounts[accountIndex].password = newPassword;
+                }
+
+                // 계정 정보 업데이트
+                accounts[accountIndex].schoolName = schoolName;
+                accounts[accountIndex].grade = grade;
+
+                // 저장
+                if (dbClient) {
+                    // PostgreSQL 업데이트
+                    try {
+                        await dbClient.query(
+                            'UPDATE accounts SET school_name = $1, grade = $2, password = $3 WHERE nickname = $4',
+                            [schoolName, grade, accounts[accountIndex].password, nickname]
+                        );
+                    } catch (error) {
+                        console.error('계정 업데이트 오류:', error);
+                        res.writeHead(500);
+                        res.end(JSON.stringify({ success: false, message: '계정 업데이트 중 오류가 발생했습니다.' }));
+                        return;
+                    }
+                } else {
+                    // 파일 시스템 저장
+                    if (!(await saveAccounts(accounts))) {
+                        res.writeHead(500);
+                        res.end(JSON.stringify({ success: false, message: '계정 저장 중 오류가 발생했습니다.' }));
+                        return;
+                    }
+                }
+
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, message: '계정 정보가 수정되었습니다.' }));
+            } catch (error) {
+                console.error('계정 수정 오류:', error);
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
+            }
+        });
+        return;
+    }
+
     // 시간표 데이터 불러오기 API
     if (pathname === '/api/data' && method === 'GET') {
         const nickname = parsedUrl.query.nickname;
@@ -341,7 +423,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             try {
                 const data = await getUserData(nickname);
                 if (data) {
-                    // annualTableData1과 annualTableData2는 별도 API에서 불러오므로 제외
+                    // annualTableData1과 annualTableData2는 별도 파일에 저장되므로 제외
                     const filteredData = { ...data };
                     delete filteredData.annualTableData1;
                     delete filteredData.annualTableData2;
@@ -393,7 +475,15 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     return;
                 }
 
-                if (await saveUserData(nickname, stateData)) {
+                // 연간시수표 데이터는 별도 파일에 저장되므로 제거
+                const filteredStateData = { ...stateData };
+                delete filteredStateData.annualTableData1;
+                delete filteredStateData.annualTableData2;
+                delete filteredStateData.annualTableData;
+
+                console.log(`[일반 데이터 저장] 닉네임: ${nickname}, 연간시수표 데이터 제외됨`);
+
+                if (await saveUserData(nickname, filteredStateData)) {
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: '데이터가 저장되었습니다.' }));
                 } else {
@@ -409,159 +499,6 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         return;
     }
 
-    // 연간시수표 데이터 불러오기 API
-    if (pathname === '/api/annual-data' && method === 'GET') {
-        const nickname = parsedUrl.query.nickname;
-        const semester = parsedUrl.query.semester;
-        
-        if (!nickname || !semester) {
-            res.writeHead(400);
-            res.end(JSON.stringify({ success: false, message: '닉네임과 학기가 필요합니다.' }));
-            return;
-        }
-
-        // 학기 값 검증 (1 또는 2만 허용)
-        if (semester !== '1' && semester !== '2') {
-            res.writeHead(400);
-            res.end(JSON.stringify({ success: false, message: '학기는 1 또는 2만 가능합니다.' }));
-            return;
-        }
-
-        (async () => {
-            try {
-                console.log(`[연간시수표 불러오기 요청] 닉네임: ${nickname}, 학기: ${semester}`);
-                const userData = await getUserData(nickname);
-                
-                if (!userData) {
-                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 사용자 데이터 없음`);
-                    res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, data: [] }));
-                    return;
-                }
-                
-                console.log(`[연간시수표 불러오기] 사용자 데이터 키 목록:`, Object.keys(userData));
-                const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-                const annualData = userData[key];
-                
-                console.log(`[연간시수표 불러오기] 키 '${key}' 값 타입:`, typeof annualData, annualData === null ? '(null)' : annualData === undefined ? '(undefined)' : Array.isArray(annualData) ? `배열(${annualData.length}행)` : '기타');
-                
-                if (annualData === undefined || annualData === null) {
-                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 키 '${key}' 없음 또는 null`);
-                    res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, data: [] }));
-                    return;
-                }
-                
-                const dataArray = Array.isArray(annualData) ? annualData : [];
-                console.log(`[연간시수표 불러오기 성공] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${dataArray.length}`);
-                if (dataArray.length > 0) {
-                    console.log(`[연간시수표] 첫 번째 행 샘플:`, JSON.stringify(dataArray[0]).substring(0, 100));
-                    console.log(`[연간시수표] 마지막 행 샘플:`, JSON.stringify(dataArray[dataArray.length - 1]).substring(0, 100));
-                } else {
-                    console.warn(`[연간시수표 불러오기 경고] 데이터 배열이 비어있습니다.`);
-                }
-                
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, data: dataArray }));
-            } catch (error) {
-                console.error('[연간시수표 불러오기 오류]', error);
-                console.error('[연간시수표] 오류 스택:', error.stack);
-                res.writeHead(500);
-                res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다: ' + error.message }));
-            }
-        })();
-        return;
-    }
-
-    // 연간시수표 데이터 저장 API
-    if (pathname === '/api/annual-data' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', async () => {
-            try {
-                const data = JSON.parse(body);
-                const { nickname, semester, annualData } = data;
-
-                if (!nickname || !semester || annualData === undefined) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ success: false, message: '닉네임, 학기, 데이터가 필요합니다.' }));
-                    return;
-                }
-
-                // 학기 값 검증 (1 또는 2만 허용)
-                if (semester !== '1' && semester !== '2') {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ success: false, message: '학기는 1 또는 2만 가능합니다.' }));
-                    return;
-                }
-
-                // annualData가 배열인지 확인
-                if (!Array.isArray(annualData)) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ success: false, message: '데이터는 배열 형식이어야 합니다.' }));
-                    return;
-                }
-
-                // 사용자 데이터 불러오기
-                let userData = await getUserData(nickname);
-                if (!userData) {
-                    userData = {
-                        classCount: 3,
-                        periodCount: 7,
-                        subjectSheets: [],
-                        classData: {},
-                        preferences: {},
-                        currentWeek: new Date().toISOString(),
-                        annualHours: {},
-                        weeklyData: {}
-                    };
-                }
-
-                // 연간시수표 데이터 저장 (다른 학기 데이터는 유지)
-                const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-                const otherKey = semester === '1' ? 'annualTableData2' : 'annualTableData1';
-                
-                // 다른 학기 데이터 보존 (이미 있으면 유지, 없으면 빈 배열로 초기화)
-                if (userData[otherKey] === undefined || userData[otherKey] === null) {
-                    userData[otherKey] = [];
-                }
-                
-                // 현재 학기 데이터 저장
-                userData[key] = annualData;
-
-                console.log(`[연간시수표 저장] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${annualData.length}`);
-                console.log(`[연간시수표 저장] 다른 학기(${otherKey}) 데이터 행 수: ${userData[otherKey].length}`);
-                console.log(`[연간시수표 저장] 저장할 전체 userData 키:`, Object.keys(userData));
-
-                if (await saveUserData(nickname, userData)) {
-                    // 저장 후 확인을 위해 다시 불러오기
-                    const savedData = await getUserData(nickname);
-                    if (savedData && savedData[key]) {
-                        const savedArray = Array.isArray(savedData[key]) ? savedData[key] : [];
-                        console.log(`[연간시수표 저장 확인] 저장된 데이터 행 수: ${savedArray.length}`);
-                        if (savedArray.length !== annualData.length) {
-                            console.warn(`[연간시수표 저장 경고] 저장하려던 데이터(${annualData.length}행)와 저장된 데이터(${savedArray.length}행)가 다릅니다.`);
-                        }
-                    } else {
-                        console.error(`[연간시수표 저장 확인 실패] 저장된 데이터를 불러올 수 없습니다.`);
-                    }
-                    res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, message: `${semester}학기 연간시수표가 저장되었습니다.`, savedRowCount: annualData.length }));
-                } else {
-                    console.error(`[연간시수표 저장 실패] 닉네임: ${nickname}, 학기: ${semester}`);
-                    res.writeHead(500);
-                    res.end(JSON.stringify({ success: false, message: '연간시수표 저장 중 오류가 발생했습니다.' }));
-                }
-            } catch (error) {
-                console.error('연간시수표 저장 오류:', error);
-                res.writeHead(400);
-                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다: ' + error.message }));
-            }
-        });
-        return;
-    }
 
     // 알 수 없는 API 경로
     console.log(`[API] 알 수 없는 경로: ${method} ${pathname}`);
@@ -583,7 +520,7 @@ const server = http.createServer((req, res) => {
     // 정적 파일 서빙
     let filePath = '.' + pathname;
     if (filePath === './') {
-        filePath = './main1.html';
+        filePath = './main.html';
     }
 
     // 파일 확장자 확인
