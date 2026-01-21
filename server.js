@@ -413,15 +413,24 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             return;
         }
 
+        // 학기 값 검증 (1 또는 2만 허용)
+        if (semester !== '1' && semester !== '2') {
+            res.writeHead(400);
+            res.end(JSON.stringify({ success: false, message: '학기는 1 또는 2만 가능합니다.' }));
+            return;
+        }
+
         (async () => {
             try {
                 const userData = await getUserData(nickname);
                 if (userData) {
                     const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
                     const annualData = userData[key] || [];
+                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${annualData.length}`);
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, data: annualData }));
                 } else {
+                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 사용자 데이터 없음`);
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, data: [] }));
                 }
@@ -445,9 +454,23 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                 const data = JSON.parse(body);
                 const { nickname, semester, annualData } = data;
 
-                if (!nickname || !semester || !annualData) {
+                if (!nickname || !semester || annualData === undefined) {
                     res.writeHead(400);
                     res.end(JSON.stringify({ success: false, message: '닉네임, 학기, 데이터가 필요합니다.' }));
+                    return;
+                }
+
+                // 학기 값 검증 (1 또는 2만 허용)
+                if (semester !== '1' && semester !== '2') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '학기는 1 또는 2만 가능합니다.' }));
+                    return;
+                }
+
+                // annualData가 배열인지 확인
+                if (!Array.isArray(annualData)) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '데이터는 배열 형식이어야 합니다.' }));
                     return;
                 }
 
@@ -466,13 +489,24 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     };
                 }
 
-                // 연간시수표 데이터 저장
+                // 연간시수표 데이터 저장 (다른 학기 데이터는 유지)
                 const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
+                const otherKey = semester === '1' ? 'annualTableData2' : 'annualTableData1';
+                
+                // 다른 학기 데이터 보존 (이미 있으면 유지)
+                const otherSemesterData = userData[otherKey] || [];
+                
                 userData[key] = annualData;
+                // 다른 학기 데이터가 없었다면 빈 배열로 설정 (덮어쓰지 않음)
+                if (!userData[otherKey] && otherSemesterData.length === 0) {
+                    userData[otherKey] = [];
+                }
+
+                console.log(`[연간시수표 저장] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${annualData.length}`);
 
                 if (await saveUserData(nickname, userData)) {
                     res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, message: '연간시수표가 저장되었습니다.' }));
+                    res.end(JSON.stringify({ success: true, message: `${semester}학기 연간시수표가 저장되었습니다.` }));
                 } else {
                     res.writeHead(500);
                     res.end(JSON.stringify({ success: false, message: '연간시수표 저장 중 오류가 발생했습니다.' }));
@@ -480,7 +514,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             } catch (error) {
                 console.error('연간시수표 저장 오류:', error);
                 res.writeHead(400);
-                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
+                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다: ' + error.message }));
             }
         });
         return;
