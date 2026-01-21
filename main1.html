@@ -117,7 +117,14 @@
     </style>
 </head>
 <body>
-
+    <!--뒤로가기시 새로고침-->
+    <script>
+        window.addEventListener("pageshow", function (event) {
+          if (event.persisted) {
+            location.reload();
+          }
+        });
+        </script>
 <!-- 주차 표시 -->
 <div class="week-header">
     <div id="weekDisplay"></div>
