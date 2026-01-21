@@ -23,6 +23,10 @@
         .btn-delete { background: #dc3545; font-size: 11px; padding: 3px 8px; }
         .btn-delete:hover { opacity: 0.8; }
         .total-row { background: #fff3cd; font-weight: bold; }
+        .semester-buttons { display: flex; gap: 10px; align-items: center; }
+        .btn-semester { padding: 8px 20px; background: #e9ecef; color: #495057; border: 2px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: normal; }
+        .btn-semester:hover { background: #dee2e6; }
+        .btn-semester.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: bold; }
     </style>
 </head>
 <body>
@@ -48,10 +52,10 @@
             <button class="btn" onclick="downloadExampleFile()" style="background: #17a2b8;">예시파일</button>
             <button class="btn" onclick="document.getElementById('csvFile').click()" style="background: var(--accent);">파일선택</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;">
-            <select id="semesterSelect" onchange="switchSemester()">
-                <option value="1">1학기</option>
-                <option value="2">2학기</option>
-            </select>
+            <div class="semester-buttons">
+                <button id="semester1Btn" class="btn-semester active" onclick="switchSemester('1')">1학기</button>
+                <button id="semester2Btn" class="btn-semester" onclick="switchSemester('2')">2학기</button>
+            </div>
         </div>
     </div>
     
@@ -133,6 +137,17 @@ function init() {
         return;
     }
     
+    // 초기 버튼 상태 설정
+    const btn1 = document.getElementById('semester1Btn');
+    const btn2 = document.getElementById('semester2Btn');
+    if (currentSemester === '1') {
+        btn1.classList.add('active');
+        btn2.classList.remove('active');
+    } else {
+        btn1.classList.remove('active');
+        btn2.classList.add('active');
+    }
+    
     loadAnnualDataFromServer();
     setupCSVLoader();
 }
@@ -181,9 +196,21 @@ function loadAnnualDataFromServer() {
         });
 }
 
-function switchSemester() {
-    const select = document.getElementById('semesterSelect');
-    currentSemester = select.value;
+function switchSemester(semester) {
+    currentSemester = semester;
+    
+    // 버튼 활성화 상태 업데이트
+    const btn1 = document.getElementById('semester1Btn');
+    const btn2 = document.getElementById('semester2Btn');
+    
+    if (semester === '1') {
+        btn1.classList.add('active');
+        btn2.classList.remove('active');
+    } else {
+        btn1.classList.remove('active');
+        btn2.classList.add('active');
+    }
+    
     loadAnnualDataFromServer();
 }
 
