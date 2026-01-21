@@ -275,8 +275,9 @@ function loadDataFromServer() {
     const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
     const nickname = loginInfo.nickname;
     
-    // 연간시수표 데이터는 별도로 불러오므로 보호
+    // 연간시수표 데이터는 별도로 불러오므로 보호 (명시적으로 보호)
     const preservedAnnualTableData = state.annualTableData;
+    console.log('[메인페이지] loadDataFromServer 시작 - 보존할 연간시수표 데이터:', preservedAnnualTableData ? `${preservedAnnualTableData.length}행` : 'null');
     
     fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
         .then(response => response.json())
@@ -289,7 +290,14 @@ function loadDataFromServer() {
                 delete parsed.annualTableData1;  // 1학기 연간시수표 데이터 제외
                 delete parsed.annualTableData2;  // 2학기 연간시수표 데이터 제외
                 
+                // Object.assign 전에 annualTableData를 명시적으로 보호
+                const currentAnnualTableData = state.annualTableData;
+                
                 Object.assign(state, parsed);
+                
+                // annualTableData는 항상 보호 (서버 데이터에 포함되지 않으므로)
+                state.annualTableData = currentAnnualTableData || preservedAnnualTableData;
+                
                 if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
                 // periodCount가 없으면 기본값 7 설정
                 if (!state.periodCount) state.periodCount = 7;
@@ -298,16 +306,14 @@ function loadDataFromServer() {
                 // weeklyData1이 없으면 빈 객체 설정
                 if (!state.weeklyData1) state.weeklyData1 = {};
                 
-                // 연간시수표 데이터 복원 (아직 불러오지 않았거나 덮어쓰기 방지)
-                if (preservedAnnualTableData && (!state.annualTableData || state.annualTableData.length === 0)) {
-                    state.annualTableData = preservedAnnualTableData;
-                    console.log('[메인페이지] 기존 연간시수표 데이터 보존');
-                }
+                console.log('[메인페이지] Object.assign 후 annualTableData 상태:', state.annualTableData ? `${state.annualTableData.length}행` : 'null');
             } else {
-                // 초기 상태 설정
+                // 초기 상태 설정 (annualTableData는 보호)
+                const currentAnnualTableData = state.annualTableData;
                 state.periodCount = 7;
                 state.annualHours = {};
                 state.weeklyData1 = {};
+                state.annualTableData = currentAnnualTableData || preservedAnnualTableData;
             }
             
             // 과목 선택 드롭다운 채우기
@@ -324,10 +330,12 @@ function loadDataFromServer() {
         .catch(error => {
             console.error('데이터 불러오기 오류:', error);
             alert('서버에서 데이터를 불러오는 중 오류가 발생했습니다.');
-            // 초기 상태로 진행
+            // 초기 상태로 진행 (annualTableData는 보호)
+            const currentAnnualTableData = state.annualTableData;
             state.periodCount = 7;
             state.annualHours = {};
             state.weeklyData1 = {};
+            state.annualTableData = currentAnnualTableData || preservedAnnualTableData;
             
             const subSelect = document.getElementById('newSubName');
             allSubjects.forEach(s => subSelect.add(new Option(s, s)));
