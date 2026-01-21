@@ -341,8 +341,15 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             try {
                 const data = await getUserData(nickname);
                 if (data) {
+                    // annualTableData1과 annualTableData2는 별도 API에서 불러오므로 제외
+                    const filteredData = { ...data };
+                    delete filteredData.annualTableData1;
+                    delete filteredData.annualTableData2;
+                    delete filteredData.annualTableData;  // 혹시 있을 수 있는 일반 annualTableData도 제외
+                    
+                    console.log(`[일반 데이터 불러오기] 닉네임: ${nickname}, 연간시수표 데이터 제외됨`);
                     res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, data: data }));
+                    res.end(JSON.stringify({ success: true, data: filteredData }));
                 } else {
                     // 데이터가 없으면 초기 데이터 반환
                     res.writeHead(200);
