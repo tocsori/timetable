@@ -92,10 +92,11 @@
         }
         .button-group {
             display: flex;
+            flex-direction: column;
             gap: 10px;
         }
         .button-group .btn {
-            flex: 1;
+            width: 100%;
         }
         #createAccountForm {
             display: none;
@@ -119,13 +120,13 @@
             </div>
             
             <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="showCreateAccount()">계정 만들기</button>
                 <button type="submit" class="btn">로그인</button>
+                <button type="button" class="btn btn-secondary" onclick="showCreateAccount()">계정 만들기</button>
             </div>
         </form>
         
         <!-- 계정 만들기 폼 -->
-        <form id="createAccountForm" onsubmit="handleCreateAccount(event)">
+        <form id="createAccountForm" onsubmit="handleCreateAccount(event)" style="margin-top: 20px;">
             <div class="warning-box">
                 <strong>⚠️ 주의사항</strong>
                 본 사이트는 테스트용으로 비밀번호는 암호화되지 않으니 중요한 사이트와 동일하게 사용하지 마세요.
@@ -157,8 +158,8 @@
             </div>
             
             <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="showLogin()">로그인으로</button>
                 <button type="submit" class="btn btn-success">계정 만들기</button>
+                <button type="button" class="btn btn-secondary" onclick="showLogin()">로그인으로</button>
             </div>
         </form>
     </div>
