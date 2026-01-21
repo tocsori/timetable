@@ -271,11 +271,18 @@ function loadDataFromServer() {
     const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
     const nickname = loginInfo.nickname;
     
+    // 연간시수표 데이터는 별도로 불러오므로 보호
+    const preservedAnnualTableData = state.annualTableData;
+    
     fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
         .then(response => response.json())
         .then(result => {
             if (result.success && result.data) {
                 const parsed = result.data;
+                
+                // annualTableData는 별도 API에서 불러오므로 보호
+                delete parsed.annualTableData;
+                
                 Object.assign(state, parsed);
                 if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
                 // periodCount가 없으면 기본값 7 설정
@@ -284,6 +291,12 @@ function loadDataFromServer() {
                 if (!state.annualHours) state.annualHours = {};
                 // weeklyData2가 없으면 빈 객체 설정
                 if (!state.weeklyData2) state.weeklyData2 = {};
+                
+                // 연간시수표 데이터 복원 (아직 불러오지 않았거나 덮어쓰기 방지)
+                if (preservedAnnualTableData && (!state.annualTableData || state.annualTableData.length === 0)) {
+                    state.annualTableData = preservedAnnualTableData;
+                    console.log('[메인페이지] 기존 연간시수표 데이터 보존');
+                }
             } else {
                 // 초기 상태 설정
                 state.periodCount = 7;
@@ -298,7 +311,8 @@ function loadDataFromServer() {
             updateWeekDisplay();
             renderAll();
             
-            // 기본값으로 1학기 1주 자동 로드
+            // 기본값으로 2학기 1주 자동 로드 (항상 서버에서 최신 데이터 불러오기)
+            console.log('[메인페이지] 일반 데이터 로드 완료, 연간시수표 데이터 불러오기 시작');
             loadAnnualDataOnInit();
         })
         .catch(error => {
@@ -314,6 +328,9 @@ function loadDataFromServer() {
             
             updateWeekDisplay();
             renderAll();
+            
+            // 에러 발생 시에도 연간시수표 데이터는 불러오기 시도
+            console.log('[메인페이지] 일반 데이터 로드 실패, 연간시수표 데이터 불러오기 시도');
             loadAnnualDataOnInit();
         });
 }
@@ -378,12 +395,15 @@ function loadAnnualDataOnInit() {
             }
             
             console.log(`[메인페이지] 연간시수표 불러오기 성공 - 데이터 행 수: ${data.length}`);
-            state.annualTableData = data;
             
-            // 주 선택 컨테이너 표시
-            const weekContainer = document.getElementById('weekSelectorContainer');
-            
-            if (data && data.length > 0) {
+            // 데이터가 있으면 반드시 state에 저장
+            if (data && Array.isArray(data) && data.length > 0) {
+                state.annualTableData = data;
+                console.log(`[메인페이지] state.annualTableData에 데이터 저장 완료 - ${data.length}행`);
+                
+                // 주 선택 컨테이너 표시
+                const weekContainer = document.getElementById('weekSelectorContainer');
+                
                 // 첫 번째 주로 초기화
                 currentWeekIndex = 0;
                 
@@ -392,18 +412,32 @@ function loadAnnualDataOnInit() {
                 
                 // 화면 업데이트
                 updateAnnualWeekDisplay();
+                updateWeekPeriodInfo();
                 renderAll();
                 
                 // 목표시수 데이터 불러오기
                 loadWeekData();
                 
-                weekContainer.style.display = 'flex';
+                if (weekContainer) {
+                    weekContainer.style.display = 'flex';
+                }
                 console.log(`[메인페이지] 연간시수표 데이터 로드 완료 - 주/기간 표시 활성화`);
+            } else {
+                // 데이터가 없으면 state.annualTableData를 null로 설정하여 명확히 함
+                state.annualTableData = null;
+                console.log(`[메인페이지] 연간시수표 데이터 없음 - state.annualTableData를 null로 설정`);
+                const weekContainer = document.getElementById('weekSelectorContainer');
+                if (weekContainer) {
+                    weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
+                    weekContainer.style.display = 'flex';
+                }
             }
         })
         .catch(error => {
             console.error('[메인페이지] 초기 데이터 로드 실패:', error);
             console.error('[메인페이지] 오류 상세:', error.stack);
+            // 에러 발생 시에도 state.annualTableData를 명확히 설정
+            state.annualTableData = null;
         });
 }
 
