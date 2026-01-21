@@ -281,7 +281,16 @@ function loadDataFromServer() {
                 const parsed = result.data;
                 
                 // annualTableData는 별도 API에서 불러오므로 보호
+                const hadAnnualTableData1 = parsed.annualTableData1 !== undefined;
+                const hadAnnualTableData2 = parsed.annualTableData2 !== undefined;
+                
                 delete parsed.annualTableData;
+                delete parsed.annualTableData1;  // 1학기 연간시수표 데이터 제외
+                delete parsed.annualTableData2;  // 2학기 연간시수표 데이터 제외
+                
+                if (hadAnnualTableData1 || hadAnnualTableData2) {
+                    console.log(`[메인페이지 2학기] 서버 데이터에서 연간시수표 제외 - annualTableData1: ${hadAnnualTableData1}, annualTableData2: ${hadAnnualTableData2}`);
+                }
                 
                 Object.assign(state, parsed);
                 if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
@@ -359,7 +368,8 @@ function loadAnnualDataOnInit() {
         return;
     }
     
-    console.log(`[메인페이지] 연간시수표 데이터 불러오기 시작 - 닉네임: ${nickname}, 학기: ${semester}`);
+    console.log(`[메인페이지 2학기] 연간시수표 데이터 불러오기 시작 - 닉네임: ${nickname}, 학기: ${semester}`);
+    console.log(`[메인페이지 2학기] 현재 state.annualTableData 상태:`, state.annualTableData ? `${state.annualTableData.length}행` : 'null');
     
     fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${semester}`)
         .then(response => {
@@ -394,12 +404,13 @@ function loadAnnualDataOnInit() {
                 return;
             }
             
-            console.log(`[메인페이지] 연간시수표 불러오기 성공 - 데이터 행 수: ${data.length}`);
+            console.log(`[메인페이지 2학기] 연간시수표 불러오기 성공 - 데이터 행 수: ${data.length}`);
             
             // 데이터가 있으면 반드시 state에 저장
             if (data && Array.isArray(data) && data.length > 0) {
                 state.annualTableData = data;
-                console.log(`[메인페이지] state.annualTableData에 데이터 저장 완료 - ${data.length}행`);
+                console.log(`[메인페이지 2학기] state.annualTableData에 데이터 저장 완료 - ${data.length}행`);
+                console.log(`[메인페이지 2학기] 저장 후 state.annualTableData 확인:`, state.annualTableData ? `${state.annualTableData.length}행` : 'null');
                 
                 // 주 선택 컨테이너 표시
                 const weekContainer = document.getElementById('weekSelectorContainer');
@@ -421,11 +432,11 @@ function loadAnnualDataOnInit() {
                 if (weekContainer) {
                     weekContainer.style.display = 'flex';
                 }
-                console.log(`[메인페이지] 연간시수표 데이터 로드 완료 - 주/기간 표시 활성화`);
+                console.log(`[메인페이지 2학기] 연간시수표 데이터 로드 완료 - 주/기간 표시 활성화`);
             } else {
                 // 데이터가 없으면 state.annualTableData를 null로 설정하여 명확히 함
                 state.annualTableData = null;
-                console.log(`[메인페이지] 연간시수표 데이터 없음 - state.annualTableData를 null로 설정`);
+                console.log(`[메인페이지 2학기] 연간시수표 데이터 없음 - state.annualTableData를 null로 설정`);
                 const weekContainer = document.getElementById('weekSelectorContainer');
                 if (weekContainer) {
                     weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
