@@ -7,6 +7,48 @@ const querystring = require('querystring');
 const PORT = process.env.PORT || 3000;
 const ACCOUNTS_FILE = './accounts.json';
 const DATA_DIR = './data';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+// PostgreSQL 클라이언트 (DATABASE_URL이 있을 때만 사용)
+let dbClient = null;
+if (DATABASE_URL) {
+    const { Client } = require('pg');
+    dbClient = new Client({
+        connectionString: DATABASE_URL,
+        ssl: DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : false
+    });
+    
+    // 데이터베이스 연결 및 테이블 생성
+    dbClient.connect()
+        .then(() => {
+            console.log('PostgreSQL 데이터베이스에 연결되었습니다.');
+            return dbClient.query(`
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id SERIAL PRIMARY KEY,
+                    school_name VARCHAR(255) NOT NULL,
+                    grade INTEGER NOT NULL,
+                    nickname VARCHAR(255) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        })
+        .then(() => {
+            return dbClient.query(`
+                CREATE TABLE IF NOT EXISTS user_data (
+                    nickname VARCHAR(255) PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        })
+        .then(() => {
+            console.log('데이터베이스 테이블이 준비되었습니다.');
+        })
+        .catch(err => {
+            console.error('데이터베이스 연결 오류:', err);
+        });
+}
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -21,27 +63,69 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon'
 };
 
-// 계정 파일 읽기
-function getAccounts() {
-    try {
-        if (fs.existsSync(ACCOUNTS_FILE)) {
-            const data = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
-            return JSON.parse(data);
+// 계정 읽기 (PostgreSQL 또는 파일 시스템)
+async function getAccounts() {
+    if (dbClient) {
+        try {
+            const result = await dbClient.query('SELECT * FROM accounts ORDER BY created_at');
+            return result.rows.map(row => ({
+                schoolName: row.school_name,
+                grade: row.grade,
+                nickname: row.nickname,
+                password: row.password,
+                createdAt: row.created_at
+            }));
+        } catch (error) {
+            console.error('계정 조회 오류:', error);
+            return [];
         }
-    } catch (error) {
-        console.error('계정 파일 읽기 오류:', error);
+    } else {
+        try {
+            if (fs.existsSync(ACCOUNTS_FILE)) {
+                const data = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error('계정 파일 읽기 오류:', error);
+        }
+        return [];
     }
-    return [];
 }
 
-// 계정 파일 저장
-function saveAccounts(accounts) {
-    try {
-        fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), 'utf8');
-        return true;
-    } catch (error) {
-        console.error('계정 파일 저장 오류:', error);
-        return false;
+// 계정 저장 (PostgreSQL 또는 파일 시스템)
+async function saveAccounts(accounts) {
+    if (dbClient) {
+        // PostgreSQL은 개별 계정을 저장하므로, 전체 배열을 저장하는 대신
+        // 개별 계정 저장 로직은 별도 함수로 처리
+        return true; // 개별 계정 저장은 insertAccount 함수에서 처리
+    } else {
+        try {
+            fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), 'utf8');
+            return true;
+        } catch (error) {
+            console.error('계정 파일 저장 오류:', error);
+            return false;
+        }
+    }
+}
+
+// 개별 계정 저장 (PostgreSQL용)
+async function insertAccount(account) {
+    if (dbClient) {
+        try {
+            await dbClient.query(
+                'INSERT INTO accounts (school_name, grade, nickname, password) VALUES ($1, $2, $3, $4)',
+                [account.schoolName, account.grade, account.nickname, account.password]
+            );
+            return true;
+        } catch (error) {
+            console.error('계정 저장 오류:', error);
+            return false;
+        }
+    } else {
+        const accounts = await getAccounts();
+        accounts.push(account);
+        return await saveAccounts(accounts);
     }
 }
 
@@ -58,29 +142,55 @@ function getUserDataFile(nickname) {
     return path.join(DATA_DIR, `${nickname}_data.json`);
 }
 
-// 사용자 데이터 읽기
-function getUserData(nickname) {
-    try {
-        const filePath = getUserDataFile(nickname);
-        if (fs.existsSync(filePath)) {
-            const data = fs.readFileSync(filePath, 'utf8');
-            return JSON.parse(data);
+// 사용자 데이터 읽기 (PostgreSQL 또는 파일 시스템)
+async function getUserData(nickname) {
+    if (dbClient) {
+        try {
+            const result = await dbClient.query('SELECT data FROM user_data WHERE nickname = $1', [nickname]);
+            if (result.rows.length > 0) {
+                return JSON.parse(result.rows[0].data);
+            }
+        } catch (error) {
+            console.error('사용자 데이터 조회 오류:', error);
         }
-    } catch (error) {
-        console.error('데이터 파일 읽기 오류:', error);
+        return null;
+    } else {
+        try {
+            const filePath = getUserDataFile(nickname);
+            if (fs.existsSync(filePath)) {
+                const data = fs.readFileSync(filePath, 'utf8');
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error('데이터 파일 읽기 오류:', error);
+        }
+        return null;
     }
-    return null;
 }
 
-// 사용자 데이터 저장
-function saveUserData(nickname, data) {
-    try {
-        const filePath = getUserDataFile(nickname);
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-        return true;
-    } catch (error) {
-        console.error('데이터 파일 저장 오류:', error);
-        return false;
+// 사용자 데이터 저장 (PostgreSQL 또는 파일 시스템)
+async function saveUserData(nickname, data) {
+    if (dbClient) {
+        try {
+            const dataJson = JSON.stringify(data);
+            await dbClient.query(
+                'INSERT INTO user_data (nickname, data) VALUES ($1, $2) ON CONFLICT (nickname) DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP',
+                [nickname, dataJson]
+            );
+            return true;
+        } catch (error) {
+            console.error('사용자 데이터 저장 오류:', error);
+            return false;
+        }
+    } else {
+        try {
+            const filePath = getUserDataFile(nickname);
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+            return true;
+        } catch (error) {
+            console.error('데이터 파일 저장 오류:', error);
+            return false;
+        }
     }
 }
 
@@ -107,7 +217,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const { schoolName, grade, nickname, password } = data;
@@ -118,7 +228,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     return;
                 }
 
-                const accounts = getAccounts();
+                const accounts = await getAccounts();
                 
                 // 중복 체크
                 if (accounts.find(acc => acc.nickname === nickname)) {
@@ -136,9 +246,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     createdAt: new Date().toISOString()
                 };
 
-                accounts.push(newAccount);
-                
-                if (saveAccounts(accounts)) {
+                if (await insertAccount(newAccount)) {
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: '계정이 생성되었습니다.' }));
                 } else {
@@ -146,6 +254,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     res.end(JSON.stringify({ success: false, message: '계정 저장 중 오류가 발생했습니다.' }));
                 }
             } catch (error) {
+                console.error('계정 생성 오류:', error);
                 res.writeHead(400);
                 res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
             }
@@ -159,7 +268,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const { nickname, password } = data;
@@ -170,7 +279,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     return;
                 }
 
-                const accounts = getAccounts();
+                const accounts = await getAccounts();
                 const account = accounts.find(acc => acc.nickname === nickname && acc.password === password);
 
                 if (account) {
@@ -188,6 +297,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     res.end(JSON.stringify({ success: false, message: '일치하는 내용이 없습니다. 계정을 새로 만들어주세요.' }));
                 }
             } catch (error) {
+                console.error('로그인 오류:', error);
                 res.writeHead(400);
                 res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
             }
@@ -197,16 +307,22 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
 
     // 계정 목록 조회 API (관리용)
     if (pathname === '/api/accounts' && method === 'GET') {
-        const accounts = getAccounts();
-        // 비밀번호 제외하고 반환
-        const safeAccounts = accounts.map(acc => ({
-            schoolName: acc.schoolName,
-            grade: acc.grade,
-            nickname: acc.nickname,
-            createdAt: acc.createdAt
-        }));
-        res.writeHead(200);
-        res.end(JSON.stringify({ success: true, accounts: safeAccounts }));
+        try {
+            const accounts = await getAccounts();
+            // 비밀번호 제외하고 반환
+            const safeAccounts = accounts.map(acc => ({
+                schoolName: acc.schoolName,
+                grade: acc.grade,
+                nickname: acc.nickname,
+                createdAt: acc.createdAt
+            }));
+            res.writeHead(200);
+            res.end(JSON.stringify({ success: true, accounts: safeAccounts }));
+        } catch (error) {
+            console.error('계정 목록 조회 오류:', error);
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: '계정 목록 조회 중 오류가 발생했습니다.' }));
+        }
         return;
     }
 
@@ -219,26 +335,32 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             return;
         }
 
-        const data = getUserData(nickname);
-        if (data) {
-            res.writeHead(200);
-            res.end(JSON.stringify({ success: true, data: data }));
-        } else {
-            // 데이터가 없으면 초기 데이터 반환
-            res.writeHead(200);
-            res.end(JSON.stringify({ 
-                success: true, 
-                data: {
-                    classCount: 3,
-                    periodCount: 7,
-                    subjectSheets: [],
-                    classData: {},
-                    preferences: {},
-                    currentWeek: new Date().toISOString(),
-                    annualHours: {},
-                    weeklyData: {}
-                }
-            }));
+        try {
+            const data = await getUserData(nickname);
+            if (data) {
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, data: data }));
+            } else {
+                // 데이터가 없으면 초기 데이터 반환
+                res.writeHead(200);
+                res.end(JSON.stringify({ 
+                    success: true, 
+                    data: {
+                        classCount: 3,
+                        periodCount: 7,
+                        subjectSheets: [],
+                        classData: {},
+                        preferences: {},
+                        currentWeek: new Date().toISOString(),
+                        annualHours: {},
+                        weeklyData: {}
+                    }
+                }));
+            }
+        } catch (error) {
+            console.error('데이터 불러오기 오류:', error);
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: '데이터 불러오기 중 오류가 발생했습니다.' }));
         }
         return;
     }
@@ -249,7 +371,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const { nickname, state: stateData } = data;
@@ -260,7 +382,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     return;
                 }
 
-                if (saveUserData(nickname, stateData)) {
+                if (await saveUserData(nickname, stateData)) {
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: '데이터가 저장되었습니다.' }));
                 } else {
@@ -268,6 +390,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     res.end(JSON.stringify({ success: false, message: '데이터 저장 중 오류가 발생했습니다.' }));
                 }
             } catch (error) {
+                console.error('데이터 저장 오류:', error);
                 res.writeHead(400);
                 res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
             }
@@ -286,15 +409,21 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             return;
         }
 
-        const userData = getUserData(nickname);
-        if (userData) {
-            const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-            const annualData = userData[key] || [];
-            res.writeHead(200);
-            res.end(JSON.stringify({ success: true, data: annualData }));
-        } else {
-            res.writeHead(200);
-            res.end(JSON.stringify({ success: true, data: [] }));
+        try {
+            const userData = await getUserData(nickname);
+            if (userData) {
+                const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
+                const annualData = userData[key] || [];
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, data: annualData }));
+            } else {
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, data: [] }));
+            }
+        } catch (error) {
+            console.error('연간시수표 불러오기 오류:', error);
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다.' }));
         }
         return;
     }
@@ -305,7 +434,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const { nickname, semester, annualData } = data;
@@ -317,7 +446,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                 }
 
                 // 사용자 데이터 불러오기
-                let userData = getUserData(nickname);
+                let userData = await getUserData(nickname);
                 if (!userData) {
                     userData = {
                         classCount: 3,
@@ -335,7 +464,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                 const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
                 userData[key] = annualData;
 
-                if (saveUserData(nickname, userData)) {
+                if (await saveUserData(nickname, userData)) {
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: '연간시수표가 저장되었습니다.' }));
                 } else {
@@ -343,6 +472,7 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     res.end(JSON.stringify({ success: false, message: '연간시수표 저장 중 오류가 발생했습니다.' }));
                 }
             } catch (error) {
+                console.error('연간시수표 저장 오류:', error);
                 res.writeHead(400);
                 res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
             }
@@ -398,9 +528,15 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    ensureDataDir();
+    if (!dbClient) {
+        ensureDataDir();
+    }
     console.log(`서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
     console.log(`브라우저에서 http://localhost:${PORT} 를 열어주세요.`);
-    console.log(`계정 정보는 ${ACCOUNTS_FILE} 파일에 저장됩니다.`);
-    console.log(`사용자 데이터는 ${DATA_DIR} 디렉토리에 저장됩니다.`);
+    if (dbClient) {
+        console.log(`데이터는 PostgreSQL 데이터베이스에 저장됩니다.`);
+    } else {
+        console.log(`계정 정보는 ${ACCOUNTS_FILE} 파일에 저장됩니다.`);
+        console.log(`사용자 데이터는 ${DATA_DIR} 디렉토리에 저장됩니다.`);
+    }
 });
