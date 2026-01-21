@@ -286,6 +286,8 @@ function loadDataFromServer() {
                 
                 // annualTableData는 별도 API에서 불러오므로 보호
                 delete parsed.annualTableData;
+                delete parsed.annualTableData1;  // 1학기 연간시수표 데이터 제외
+                delete parsed.annualTableData2;  // 2학기 연간시수표 데이터 제외
                 
                 Object.assign(state, parsed);
                 if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
