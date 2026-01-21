@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  timetable:
+    build: .
+    container_name: timetable-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./accounts.json:/app/accounts.json
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
