@@ -135,56 +135,45 @@
     </div>
 </div>
 
-<!-- 툴바 (타이틀 바로 밑) -->
-<div class="section" style="margin-bottom: 20px;">
-    <div class="toolbar">
-        <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
-        <button class="btn btn-load" onclick="document.getElementById('fileInput').click()">파일 불러오기</button>
-        <input type="file" id="fileInput" accept=".json,.xlsx" onchange="loadFromFile(event)">
-        <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
-        <button class="btn btn-import" onclick="document.getElementById('excelInput').click()">엑셀 불러오기</button>
-        <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
-        <button class="btn" onclick="window.print()">인쇄</button>
-    </div>
-</div>
-
 <!-- 연간시수표 선택 섹션 -->
 <div class="section" style="padding: 15px; margin-bottom: 20px;">
-    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <label><strong>1학기</strong></label>
-        <button class="btn" onclick="location.href='main2.html'" style="background: #17a2b8; margin-left: 10px;">2학기로 이동</button>
-        <div id="weekSelectorContainer" style="display: none; margin-left: 20px; align-items: center;">
-            <button class="btn" onclick="changeWeek(-1)" style="padding: 6px 12px; font-size: 16px;">&lt;</button>
-            <span id="annualWeekDisplay" style="margin: 0 10px; font-weight: bold; min-width: 80px; text-align: center; display: inline-block;"></span>
-            <button class="btn" onclick="changeWeek(1)" style="padding: 6px 12px; font-size: 16px;">&gt;</button>
-            <span id="periodDisplay" style="margin-left: 15px; font-weight: bold; color: var(--accent);"></span>
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <label><strong>1학기</strong></label>
+            <button class="btn" onclick="location.href='main2.html'" style="background: #17a2b8; margin-left: 10px;">2학기로 이동</button>
+            <div id="weekSelectorContainer" style="display: none; margin-left: 20px; align-items: center;">
+                <button class="btn" onclick="changeWeek(-1)" style="padding: 6px 12px; font-size: 16px;">&lt;</button>
+                <span id="annualWeekDisplay" style="margin: 0 10px; font-weight: bold; min-width: 80px; text-align: center; display: inline-block;"></span>
+                <button class="btn" onclick="changeWeek(1)" style="padding: 6px 12px; font-size: 16px;">&gt;</button>
+                <span id="periodDisplay" style="margin-left: 15px; font-weight: bold; color: var(--accent);"></span>
+            </div>
+        </div>
+        <div class="toolbar" style="margin-left: auto;">
+            <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
+            <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
+            <button class="btn btn-import" onclick="document.getElementById('excelInput').click()">엑셀 불러오기</button>
+            <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
+            <button class="btn" onclick="window.print()">인쇄</button>
         </div>
     </div>
-</div>
-
-<div class="section" style="padding: 15px;">
-    <h2 style="font-size: 16px; margin-bottom: 10px;">⚙️ 고정 교과 및 전담 교사 설정(전담 고정표를 수정한 후에는 꼭 시간표를 확인하세요.)</h2>
-    <div class="subject-manager">
-        <span><strong>새 고정 시트:</strong></span>
-        <select id="newSubName" style="width:120px;"></select>
-        <button class="btn" onclick="addSubjectSheet()">시트 생성</button>
-    </div>
-
-    <div id="masterSheetsContainer"></div>
 </div>
 
 <div class="section">
     <h2>📊 전체 학급 주간 시수 및 달성도</h2>
     <div id="unifiedHoursTable"></div>
-    <div class="toolbar" style="margin-top: 15px;">
-        <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
-        <button class="btn btn-load" onclick="document.getElementById('fileInputBottom').click()">파일 불러오기</button>
-        <input type="file" id="fileInputBottom" accept=".json,.xlsx" onchange="loadFromFile(event)" style="display:none">
-        <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
-        <button class="btn btn-import" onclick="document.getElementById('excelInputBottom').click()">엑셀 불러오기</button>
-        <input type="file" id="excelInputBottom" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
-        <button class="btn" onclick="window.print()">인쇄</button>
+</div>
+
+<div class="section" style="padding: 15px;">
+    <h2 style="font-size: 16px; margin-bottom: 10px;">⚙️ 고정 교과 및 전담 교사 설정(고정 시간표를 수정한 후에는 꼭 시간표를 확인하세요.)</h2>
+    <div class="subject-manager">
+        <span><strong>새 고정 시트:</strong></span>
+        <select id="newSubName" style="width:120px;"></select>
+        <input type="text" id="newSubTag" placeholder="태그 (예: 담임)" style="width:100px; padding: 5px; margin-right: 5px; border: 1px solid #ccc; border-radius: 3px;">
+        <button class="btn" onclick="addSubjectSheet()">시트 생성</button>
+        <button class="btn" onclick="copyAllFixedTimetables()" style="background: #17a2b8;">모든 고정시간표 복사</button>
     </div>
+
+    <div id="masterSheetsContainer"></div>
 </div>
 
 <div class="section" id="classTimetableSection">
@@ -548,7 +537,7 @@ function exportToExcel() {
     const masterData = [];
     masterData.push(['고정 교과 설정']);
     state.subjectSheets.forEach(sheet => {
-        masterData.push([`[${sheet.subName}] 전담 고정표`]);
+        masterData.push([`[${sheet.subName}] 고정 시간표`]);
         masterData.push(['교시', '월', '화', '수', '목', '금']);
         for (let r = 0; r < state.periodCount; r++) {
             const row = [r + 1];
@@ -674,7 +663,10 @@ function updateClassCount(val) {
 function addSubjectSheet() {
     const name = document.getElementById('newSubName').value;
     if (!name) return alert("과목을 선택해주세요.");
-    state.subjectSheets.push({ subName: name, memo: "", rules: {} });
+    const tag = document.getElementById('newSubTag').value.trim();
+    state.subjectSheets.push({ subName: name, tag: tag, memo: "", rules: {} });
+    document.getElementById('newSubName').value = '';
+    document.getElementById('newSubTag').value = '';
     saveAndRefresh();
 }
 
@@ -694,7 +686,8 @@ function renderMasterSheets() {
         const div = document.createElement('div');
         div.className = 'master-sheet';
         const titleCls = getSubjectClass(sheet.subName);
-        let html = `<h3><span class="${titleCls}">[${sheet.subName}]</span> 전담 고정표 <button class="btn" style="background: #6c757d; font-size: 11px; padding: 3px 8px;" onclick="showGlobalCopyDialog(${sIdx})">글로벌</button> <button class="btn btn-del" onclick="deleteSheet(${sIdx})">삭제</button></h3>`;
+        const tagDisplay = sheet.tag ? ` <span style="color: #666; font-size: 12px;">${sheet.tag}</span>` : '';
+        let html = `<h3><span class="${titleCls}">[${sheet.subName}]</span>${tagDisplay} 고정 시간표 <button class="btn" style="background: #6c757d; font-size: 11px; padding: 3px 8px;" onclick="showGlobalCopyDialog(${sIdx})">복사</button> <button class="btn btn-del" onclick="deleteSheet(${sIdx})">삭제</button></h3>`;
         html += `<table><thead><tr><th>교시</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
         
         for (let r = 0; r < state.periodCount; r++) {
@@ -733,10 +726,23 @@ function showClassSelector(event, sIdx, r, c) {
     const key = `${r}-${c}`;
     const selectedClasses = state.subjectSheets[sIdx].rules[key] || [];
 
+    // 다른 전담 고정표의 같은 좌표에 이미 선택된 반 찾기
+    const occupiedClasses = new Set();
+    state.subjectSheets.forEach((sheet, idx) => {
+        if (idx !== sIdx && sheet.rules[key]) {
+            sheet.rules[key].forEach(classNum => {
+                occupiedClasses.add(classNum);
+            });
+        }
+    });
+
     let html = `<strong>대상 학급</strong><hr>`;
     for (let i = 1; i <= state.classCount; i++) {
         const checked = selectedClasses.includes(i) ? 'checked' : '';
-        html += `<label><input type="checkbox" value="${i}" ${checked} onchange="toggleRule(${sIdx}, ${r}, ${c}, ${i}, this.checked)"> ${i}반</label>`;
+        const disabled = occupiedClasses.has(i) && !selectedClasses.includes(i) ? 'disabled' : '';
+        const disabledText = occupiedClasses.has(i) && !selectedClasses.includes(i) ? ' (다른 고정 시간표에서 사용 중)' : '';
+        const style = disabled ? 'style="opacity: 0.5; cursor: not-allowed;"' : '';
+        html += `<label ${style}><input type="checkbox" value="${i}" ${checked} ${disabled} onchange="toggleRule(${sIdx}, ${r}, ${c}, ${i}, this.checked)"> ${i}반${disabledText}</label>`;
     }
     html += `<hr><button class="btn" style="width:100%; font-size:11px;" onclick="closeSelector()">닫기</button>`;
     
@@ -751,7 +757,26 @@ function toggleRule(sIdx, r, c, classNum, isChecked) {
     if (!state.subjectSheets[sIdx].rules[key]) state.subjectSheets[sIdx].rules[key] = [];
     
     if (isChecked) {
-        if (!state.subjectSheets[sIdx].rules[key].includes(classNum)) state.subjectSheets[sIdx].rules[key].push(classNum);
+        // 다른 전담 고정표의 같은 좌표에 이미 선택된 반인지 확인
+        let isOccupied = false;
+        state.subjectSheets.forEach((sheet, idx) => {
+            if (idx !== sIdx && sheet.rules[key] && sheet.rules[key].includes(classNum)) {
+                isOccupied = true;
+            }
+        });
+        
+        if (isOccupied) {
+            alert(`${classNum}반은 다른 고정 시간표에서 이미 사용 중입니다.`);
+            // 체크박스 상태 되돌리기
+            const selector = document.getElementById('globalClassSelector');
+            const checkbox = selector.querySelector(`input[value="${classNum}"]`);
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        if (!state.subjectSheets[sIdx].rules[key].includes(classNum)) {
+            state.subjectSheets[sIdx].rules[key].push(classNum);
+        }
     } else {
         state.subjectSheets[sIdx].rules[key] = state.subjectSheets[sIdx].rules[key].filter(n => n !== classNum);
     }
@@ -980,7 +1005,7 @@ function handleDragEnd(e) {
     dragSource = null;
 }
 
-// 전담 고정표 드래그 앤 드롭 함수들
+// 고정 시간표 드래그 앤 드롭 함수들
 let masterDragSource = null;
 
 function handleMasterDragStart(e, sIdx, r, c) {
@@ -1487,10 +1512,89 @@ function clearClassTimetable(classNum) {
         grid.replaceChild(newCard, card);
     }
 }
-// 글로벌 복사 다이얼로그 표시
+// 복사 다이얼로그 표시
 function showGlobalCopyDialog(sheetIdx) {
     if (!state.annualTableData || state.annualTableData.length === 0) {
         alert('연간시수표 데이터를 먼저 로드해주세요.');
+        return;
+    }
+    
+    const maxWeek = state.annualTableData.length;
+    const targetWeek = prompt(`복사할 주를 입력하세요 (1~${maxWeek}):`, String(currentWeekIndex + 1));
+    if (!targetWeek) return;
+    
+    const targetWeekIdx = parseInt(targetWeek) - 1; // 인덱스로 변환
+    
+    if (isNaN(targetWeekIdx) || targetWeekIdx < 0 || targetWeekIdx >= maxWeek) {
+        alert('올바른 주를 입력해주세요.');
+        return;
+    }
+    
+    if (targetWeekIdx === currentWeekIndex) {
+        alert('현재 주와 동일합니다. 다른 주를 선택해주세요.');
+        return;
+    }
+    
+    if (confirm(`현재 주의 고정 시간표를 ${targetWeek}주로 복사하시겠습니까?`)) {
+        copySheetToWeek(sheetIdx, targetWeekIdx);
+    }
+}
+
+// 고정 시간표를 특정 주에 복사
+function copySheetToWeek(sheetIdx, targetWeekIdx) {
+    const sheet = state.subjectSheets[sheetIdx];
+    if (!sheet) return;
+    
+    // 현재 주의 데이터를 주별 데이터에 저장
+    if (currentWeekIndex >= 0) {
+        saveCurrentWeekData();
+    }
+    
+    // 대상 주에 복사
+    if (!state.weeklyData1) state.weeklyData1 = {};
+    if (!state.weeklyData1[targetWeekIdx]) {
+        state.weeklyData1[targetWeekIdx] = {
+            subjectSheets: [],
+            classData: {}
+        };
+    }
+    
+    // 해당 주의 subjectSheets 배열에서 같은 과목과 태그 찾기
+    const weekSheets = state.weeklyData1[targetWeekIdx].subjectSheets;
+    const sheetTag = sheet.tag || '';
+    const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName && (s.tag || '') === sheetTag);
+    
+    // 복사할 데이터 준비
+    const copiedSheet = {
+        subName: sheet.subName,
+        tag: sheet.tag || '',
+        memo: sheet.memo,
+        rules: JSON.parse(JSON.stringify(sheet.rules))
+    };
+    
+    if (existingIdx >= 0) {
+        // 기존 시트 교체 (과목명과 태그가 모두 같은 경우)
+        weekSheets[existingIdx] = copiedSheet;
+    } else {
+        // 새 시트 추가 (과목명이 다르거나 태그가 다른 경우)
+        weekSheets.push(copiedSheet);
+    }
+    
+    // 서버에 저장
+    saveDataToServer();
+    
+    alert(`${targetWeekIdx + 1}주로 복사가 완료되었습니다.`);
+}
+
+// 모든 고정시간표 복사 다이얼로그 표시
+function copyAllFixedTimetables() {
+    if (!state.annualTableData || state.annualTableData.length === 0) {
+        alert('연간시수표 데이터를 먼저 로드해주세요.');
+        return;
+    }
+    
+    if (state.subjectSheets.length === 0) {
+        alert('복사할 고정시간표가 없습니다.');
         return;
     }
     
@@ -1509,22 +1613,19 @@ function showGlobalCopyDialog(sheetIdx) {
         return;
     }
     
-    if (confirm(`${startWeek}주부터 ${endWeek}주까지 전담 고정표를 복사하시겠습니까?`)) {
-        copySheetToWeeks(sheetIdx, start, end);
+    if (confirm(`현재 주의 모든 고정시간표를 ${startWeek}주부터 ${endWeek}주까지 복사하시겠습니까?`)) {
+        copyAllSheetsToWeeks(start, end);
     }
 }
 
-// 전담 고정표를 여러 주에 복사
-function copySheetToWeeks(sheetIdx, startWeekIdx, endWeekIdx) {
-    const sheet = state.subjectSheets[sheetIdx];
-    if (!sheet) return;
-    
+// 모든 고정시간표를 여러 주에 복사
+function copyAllSheetsToWeeks(startWeekIdx, endWeekIdx) {
     // 현재 주의 데이터를 주별 데이터에 저장
     if (currentWeekIndex >= 0) {
         saveCurrentWeekData();
     }
     
-    // 각 주에 복사
+    // 각 주에 모든 시트 복사
     for (let weekIdx = startWeekIdx; weekIdx <= endWeekIdx; weekIdx++) {
         if (!state.weeklyData1) state.weeklyData1 = {};
         if (!state.weeklyData1[weekIdx]) {
@@ -1534,30 +1635,35 @@ function copySheetToWeeks(sheetIdx, startWeekIdx, endWeekIdx) {
             };
         }
         
-        // 해당 주의 subjectSheets 배열에서 같은 과목 찾기
         const weekSheets = state.weeklyData1[weekIdx].subjectSheets;
-        const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName);
         
-        // 복사할 데이터 준비
-        const copiedSheet = {
-            subName: sheet.subName,
-            memo: sheet.memo,
-            rules: JSON.parse(JSON.stringify(sheet.rules))
-        };
-        
-        if (existingIdx >= 0) {
-            // 기존 시트 교체
-            weekSheets[existingIdx] = copiedSheet;
-        } else {
-            // 새 시트 추가
-            weekSheets.push(copiedSheet);
-        }
+        // 모든 시트 복사
+        state.subjectSheets.forEach(sheet => {
+            const sheetTag = sheet.tag || '';
+            const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName && (s.tag || '') === sheetTag);
+            
+            // 복사할 데이터 준비
+            const copiedSheet = {
+                subName: sheet.subName,
+                tag: sheet.tag || '',
+                memo: sheet.memo,
+                rules: JSON.parse(JSON.stringify(sheet.rules))
+            };
+            
+            if (existingIdx >= 0) {
+                // 기존 시트 교체 (과목명과 태그가 모두 같은 경우)
+                weekSheets[existingIdx] = copiedSheet;
+            } else {
+                // 새 시트 추가 (과목명이 다르거나 태그가 다른 경우)
+                weekSheets.push(copiedSheet);
+            }
+        });
     }
     
     // 서버에 저장
     saveDataToServer();
     
-    alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 복사가 완료되었습니다.`);
+    alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 모든 고정시간표 복사가 완료되었습니다.`);
 }
 
 document.addEventListener('click', function(e) {
