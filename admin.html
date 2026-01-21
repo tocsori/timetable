@@ -105,18 +105,18 @@ function loadDataFromServer() {
         .then(result => {
             if (result.success && result.data) {
                 const state = result.data;
-                document.getElementById('classCount').value = state.classCount || 3;
-                document.getElementById('periodCount').value = state.periodCount || 7;
+                document.getElementById('classCount').value = state.classCount || 5;
+                document.getElementById('periodCount').value = state.periodCount || 6;
             } else {
-                document.getElementById('classCount').value = 3;
-                document.getElementById('periodCount').value = 7;
+                document.getElementById('classCount').value = 5;
+                document.getElementById('periodCount').value = 6;
             }
             renderPreferences();
         })
         .catch(error => {
             console.error('데이터 불러오기 오류:', error);
-            document.getElementById('classCount').value = 3;
-            document.getElementById('periodCount').value = 7;
+            document.getElementById('classCount').value = 5;
+            document.getElementById('periodCount').value = 6;
             renderPreferences();
         });
 }
@@ -168,8 +168,8 @@ function updatePeriodCount() {
                 state = result.data;
             } else {
                 state = {
-                    classCount: 3,
-                    periodCount: 7,
+                    classCount: 5,
+                    periodCount: 6,
                     subjectSheets: [],
                     classData: {},
                     preferences: {},
@@ -179,7 +179,7 @@ function updatePeriodCount() {
                 };
             }
             
-            const oldCount = state.periodCount || 7;
+            const oldCount = state.periodCount || 6;
             state.periodCount = newCount;
             
             // 교시 수가 줄어든 경우 해당 교시 데이터 삭제
@@ -244,11 +244,11 @@ function renderPreferences() {
         .then(response => response.json())
         .then(result => {
             let preferences = {};
-            let periodCount = 7;
+            let periodCount = 6;
             
             if (result.success && result.data) {
                 preferences = result.data.preferences || {};
-                periodCount = result.data.periodCount || 7;
+                periodCount = result.data.periodCount || 6;
             }
             
             const container = document.getElementById('preferenceContainer');
@@ -281,7 +281,7 @@ function renderPreferences() {
                 div.innerHTML = `
                     <strong>${sub}:</strong>
                     <select multiple size="3" id="pref-${sub}" onchange="updatePreference('${sub}')" style="width:200px;">
-                        ${Array.from({length: 7}, (_, i) => i + 1).map(h => 
+                        ${Array.from({length: 6}, (_, i) => i + 1).map(h => 
                             `<option value="${h}">${h}교시</option>`
                         ).join('')}
                     </select>
@@ -308,8 +308,8 @@ function updatePreference(subject) {
                 state = result.data;
             } else {
                 state = {
-                    classCount: 3,
-                    periodCount: 7,
+                    classCount: 5,
+                    periodCount: 6,
                     subjectSheets: [],
                     classData: {},
                     preferences: {},
@@ -354,8 +354,8 @@ function updateClassCount() {
                 state = result.data;
             } else {
                 state = {
-                    classCount: 3,
-                    periodCount: 7,
+                    classCount: 5,
+                    periodCount: 6,
                     subjectSheets: [],
                     classData: {},
                     preferences: {},
@@ -365,8 +365,8 @@ function updateClassCount() {
                 };
             }
             
-            const oldCount = state.classCount || 3;
-            const periodCount = state.periodCount || 7;
+            const oldCount = state.classCount || 5;
+            const periodCount = state.periodCount || 6;
             
             // 학급 수 변경
             state.classCount = newCount;
