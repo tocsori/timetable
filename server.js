@@ -424,29 +424,38 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
             try {
                 console.log(`[연간시수표 불러오기 요청] 닉네임: ${nickname}, 학기: ${semester}`);
                 const userData = await getUserData(nickname);
-                if (userData) {
-                    const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-                    const annualData = userData[key];
-                    
-                    if (annualData === undefined) {
-                        console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 키 '${key}' 없음`);
-                        res.writeHead(200);
-                        res.end(JSON.stringify({ success: true, data: [] }));
-                        return;
-                    }
-                    
-                    const dataArray = Array.isArray(annualData) ? annualData : [];
-                    console.log(`[연간시수표 불러오기 성공] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${dataArray.length}`);
-                    if (dataArray.length > 0) {
-                        console.log(`[연간시수표] 첫 번째 행 샘플:`, JSON.stringify(dataArray[0]).substring(0, 100));
-                    }
-                    res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, data: dataArray }));
-                } else {
+                
+                if (!userData) {
                     console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 사용자 데이터 없음`);
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, data: [] }));
+                    return;
                 }
+                
+                console.log(`[연간시수표 불러오기] 사용자 데이터 키 목록:`, Object.keys(userData));
+                const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
+                const annualData = userData[key];
+                
+                console.log(`[연간시수표 불러오기] 키 '${key}' 값 타입:`, typeof annualData, annualData === null ? '(null)' : annualData === undefined ? '(undefined)' : Array.isArray(annualData) ? `배열(${annualData.length}행)` : '기타');
+                
+                if (annualData === undefined || annualData === null) {
+                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 키 '${key}' 없음 또는 null`);
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: [] }));
+                    return;
+                }
+                
+                const dataArray = Array.isArray(annualData) ? annualData : [];
+                console.log(`[연간시수표 불러오기 성공] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${dataArray.length}`);
+                if (dataArray.length > 0) {
+                    console.log(`[연간시수표] 첫 번째 행 샘플:`, JSON.stringify(dataArray[0]).substring(0, 100));
+                    console.log(`[연간시수표] 마지막 행 샘플:`, JSON.stringify(dataArray[dataArray.length - 1]).substring(0, 100));
+                } else {
+                    console.warn(`[연간시수표 불러오기 경고] 데이터 배열이 비어있습니다.`);
+                }
+                
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, data: dataArray }));
             } catch (error) {
                 console.error('[연간시수표 불러오기 오류]', error);
                 console.error('[연간시수표] 오류 스택:', error.stack);
