@@ -64,6 +64,11 @@
         .selected-classes { color: var(--accent); font-weight: bold; display: block; font-size: 10px; }
 
         .fixed-cell { background-color: var(--fixed-bg); color: #666; font-weight: bold; font-size: 11px; }
+        .day-header { background: #e3f2fd !important; cursor: pointer !important; }
+        .day-header:hover { background: #bbdefb !important; }
+        .disabled-day-header { background: #ffcdd2 !important; cursor: pointer !important; }
+        .disabled-day-header:hover { background: #ef9a9a !important; }
+        .disabled-cell { opacity: 0.3; pointer-events: none; cursor: not-allowed !important; }
         .selected-subject { font-size: 11px; display: block; }
         .target-zero { background-color: var(--complete); font-weight: bold; }
         
@@ -221,7 +226,9 @@ let state = {
     annualHours: {}, // 연간시수표 { subject: hours }
     annualTableData: null, // 선택된 연간시수표 데이터
     memo: "", // 통합 메모
-    weeklyData2: {} // 2학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {} } }
+    weeklyData2: {}, // 2학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {} } }
+    disabledDays: {}, // { "월": true, "화": false } - 비활성화된 요일
+    dayPeriodLimits: {} // { "수": 5 } - 요일별 수업 수 제한 (예: 수요일은 5교시까지)
 };
 
 function init() {
@@ -670,6 +677,29 @@ function addSubjectSheet() {
 
 function deleteSheet(idx) {
     if(confirm("해당 교과 고정 설정을 삭제하시겠습니까?")) {
+        const sheet = state.subjectSheets[idx];
+        
+        // 삭제될 고정 시트의 모든 규칙에 대해 해당 셀의 내용 삭제
+        Object.keys(sheet.rules || {}).forEach(key => {
+            const [r, c] = key.split('-').map(Number);
+            const classNums = sheet.rules[key] || [];
+            
+            classNums.forEach(classNum => {
+                // 다른 고정 시트에서도 같은 셀을 사용하는지 확인
+                let isStillFixed = false;
+                state.subjectSheets.forEach((otherSheet, otherIdx) => {
+                    if (otherIdx !== idx && otherSheet.rules[key] && otherSheet.rules[key].includes(classNum)) {
+                        isStillFixed = true;
+                    }
+                });
+                
+                // 더 이상 고정되지 않으면 셀 내용 삭제
+                if (!isStillFixed && state.classData[classNum]) {
+                    state.classData[classNum].timetable[r][c] = '';
+                }
+            });
+        });
+        
         state.subjectSheets.splice(idx, 1);
         saveAndRefresh();
     }
@@ -776,7 +806,20 @@ function toggleRule(sIdx, r, c, classNum, isChecked) {
             state.subjectSheets[sIdx].rules[key].push(classNum);
         }
     } else {
+        // 체크 해제 시: 해당 셀의 내용 삭제
         state.subjectSheets[sIdx].rules[key] = state.subjectSheets[sIdx].rules[key].filter(n => n !== classNum);
+        
+        // 해당 셀이 더 이상 고정되지 않으면 내용 삭제
+        let isStillFixed = false;
+        state.subjectSheets.forEach((sheet, idx) => {
+            if (sheet.rules[key] && sheet.rules[key].includes(classNum)) {
+                isStillFixed = true;
+            }
+        });
+        
+        if (!isStillFixed && state.classData[classNum]) {
+            state.classData[classNum].timetable[r][c] = '';
+        }
     }
     saveAndRefresh();
 }
@@ -866,7 +909,12 @@ function createClassCard(num) {
     card.id = `card-${num}`;
     
     let html = `<h3>${num}반 <button class="btn btn-clear" onclick="clearClassTimetable(${num})">삭제</button> <button class="btn btn-auto" onclick="autoFill(${num})">자동 채우기</button> <span class="badge" id="badge-${num}">완료</span></h3>`;
-    html += `<table><thead><tr><th>교시</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+    html += `<table><thead><tr><th>교시</th>${days.map((d, idx) => {
+        const disabledDays = state.disabledDays || {};
+        const isDisabled = disabledDays[d] === true;
+        const dayClass = isDisabled ? 'disabled-day-header' : 'day-header';
+        return `<th class="${dayClass}" onclick="toggleDayColumn(${idx})" style="cursor: pointer; user-select: none;" title="클릭하여 ${d}요일 열 비활성화/활성화">${d}</th>`;
+    }).join('')}</tr></thead><tbody>`;
 
     for (let r = 0; r < state.periodCount; r++) {
         html += `<tr><th>${r+1}</th>`;
@@ -877,20 +925,30 @@ function createClassCard(num) {
                 if (sheet.rules[key] && sheet.rules[key].includes(num)) fixedSub = sheet.subName;
             });
 
+            // 요일별 비활성화 및 수업 수 제한 확인
+            const dayName = days[c];
+            const isDayDisabled = state.disabledDays && state.disabledDays[dayName] === true;
+            const dayLimit = state.dayPeriodLimits && state.dayPeriodLimits[dayName];
+            const isPeriodDisabled = dayLimit !== undefined && dayLimit !== null && (r + 1) > dayLimit;
+
             if (fixedSub) {
                 const cls = getSubjectClass(fixedSub);
-                html += `<td class="fixed-cell ${cls}">${fixedSub}</td>`;
+                const disabledClass = (isDayDisabled || isPeriodDisabled) ? ' disabled-cell' : '';
+                html += `<td class="fixed-cell ${cls}${disabledClass}">${fixedSub}</td>`;
                 data.timetable[r][c] = fixedSub;
             } else {
                 const cellId = `cell-${num}-${r}-${c}`;
                 const cellValue = data.timetable[r][c] || '';
                 const cls = cellValue ? getSubjectClass(cellValue) : '';
-                html += `<td class="subject-cell draggable-cell ${cls}" id="${cellId}" draggable="true" 
-                    onclick="showSubjectSelector(event, ${num}, ${r}, ${c})"
-                    ondragstart="handleDragStart(event, ${num}, ${r}, ${c})"
-                    ondragover="handleDragOver(event)"
-                    ondrop="handleDrop(event, ${num}, ${r}, ${c})"
-                    ondragend="handleDragEnd(event)">
+                const disabledClass = (isDayDisabled || isPeriodDisabled) ? ' disabled-cell' : '';
+                const disabledAttr = (isDayDisabled || isPeriodDisabled) ? ' style="opacity: 0.3; pointer-events: none; cursor: not-allowed;"' : '';
+                html += `<td class="subject-cell draggable-cell ${cls}${disabledClass}" id="${cellId}" draggable="${!(isDayDisabled || isPeriodDisabled)}" 
+                    ${disabledAttr}
+                    onclick="${(isDayDisabled || isPeriodDisabled) ? '' : `showSubjectSelector(event, ${num}, ${r}, ${c})`}"
+                    ondragstart="${(isDayDisabled || isPeriodDisabled) ? '' : `handleDragStart(event, ${num}, ${r}, ${c})`}"
+                    ondragover="${(isDayDisabled || isPeriodDisabled) ? '' : 'handleDragOver(event)'}"
+                    ondrop="${(isDayDisabled || isPeriodDisabled) ? '' : `handleDrop(event, ${num}, ${r}, ${c})`}"
+                    ondragend="${(isDayDisabled || isPeriodDisabled) ? '' : 'handleDragEnd(event)'}">
                     <span class="selected-subject">${cellValue || '-'}</span>
                 </td>`;
             }
@@ -1129,7 +1187,15 @@ function autoFill(num) {
             const key = `${r}-${c}`;
             let fixed = false;
             state.subjectSheets.forEach(sheet => { if(sheet.rules[key] && sheet.rules[key].includes(num)) fixed=true; });
-            if(!fixed && data.timetable[r][c] === "") {
+            
+            // 비활성화된 셀 확인
+            const dayName = days[c];
+            const isDayDisabled = state.disabledDays && state.disabledDays[dayName] === true;
+            const dayLimit = state.dayPeriodLimits && state.dayPeriodLimits[dayName];
+            const isPeriodDisabled = dayLimit !== undefined && dayLimit !== null && (r + 1) > dayLimit;
+            const isDisabled = isDayDisabled || isPeriodDisabled;
+            
+            if(!fixed && !isDisabled && data.timetable[r][c] === "") {
                 emptySlots.push({r, c, period: r+1});
             }
         }
@@ -1178,8 +1244,17 @@ function autoFill(num) {
         return count < targetHoursRef[item.idx];
     });
     
+    // 비활성화된 셀 제외하고 배치
+    const availableSlotsForRemaining = emptySlots.filter(slot => {
+        const dayName = days[slot.c];
+        const isDayDisabled = state.disabledDays && state.disabledDays[dayName] === true;
+        const dayLimit = state.dayPeriodLimits && state.dayPeriodLimits[dayName];
+        const isPeriodDisabled = dayLimit !== undefined && dayLimit !== null && (slot.r + 1) > dayLimit;
+        return !isDayDisabled && !isPeriodDisabled;
+    });
+    
     remaining.sort(() => Math.random() - 0.5);
-    emptySlots.forEach((slot, i) => {
+    availableSlotsForRemaining.forEach((slot, i) => {
         if(remaining[i]) data.timetable[slot.r][slot.c] = remaining[i].sub;
     });
 
@@ -1669,6 +1744,39 @@ function copyAllSheetsToWeeks(startWeekIdx, endWeekIdx) {
     saveDataToServer();
     
     alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 모든 고정시간표 복사가 완료되었습니다.`);
+}
+
+// 요일 열 비활성화/활성화 토글 함수
+function toggleDayColumn(dayIndex) {
+    const dayName = days[dayIndex];
+    if (!state.disabledDays) state.disabledDays = {};
+    
+    // 토글
+    state.disabledDays[dayName] = !state.disabledDays[dayName];
+    
+    // 비활성화된 요일의 모든 셀 내용 삭제
+    if (state.disabledDays[dayName]) {
+        for (let classNum = 1; classNum <= state.classCount; classNum++) {
+            if (state.classData[classNum] && state.classData[classNum].timetable) {
+                for (let r = 0; r < state.periodCount; r++) {
+                    // 고정된 셀이 아닌 경우에만 삭제
+                    const key = `${r}-${dayIndex}`;
+                    let isFixed = false;
+                    state.subjectSheets.forEach(sheet => {
+                        if (sheet.rules[key] && sheet.rules[key].includes(classNum)) {
+                            isFixed = true;
+                        }
+                    });
+                    
+                    if (!isFixed) {
+                        state.classData[classNum].timetable[r][dayIndex] = '';
+                    }
+                }
+            }
+        }
+    }
+    
+    saveAndRefresh();
 }
 
 document.addEventListener('click', function(e) {
