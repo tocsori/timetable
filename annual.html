@@ -34,27 +34,25 @@
 <div class="nav-buttons">
     <button class="btn" onclick="history.back()">이전 페이지로 돌아가기</button>
 </div>
-<!-- 불러온 파일 보여주기 -->
-<div id="tableArea"></div>
-<!-- 불러온 파일 투명화 -->
-<style>
-    #tableArea {
-      display: none;
-    }
-  </style>
-  
+
 <div class="section">
     <h2>📋 연간시수표</h2>
     
     <div class="info-box">
         <p>이지 에듀의 시수표를 복사해 넣은 CSV 파일을 불러오면 연간시수표가 자동으로 채워집니다. 예시파일을 다운받아 사용하세요. 또는 직접 입력할 수도 있습니다. 계의 값은 새로고침해야 적용됩니다.</p>
-        <div class="file-controls">
-            <button class="btn" onclick="downloadExampleFile()" style="background: #17a2b8;">예시파일</button>
-            <button class="btn" onclick="document.getElementById('csvFile').click()" style="background: var(--accent);">파일선택</button>
-            <input type="file" id="csvFile" accept=".csv" style="display: none;">
-            <div class="semester-buttons">
-                <button id="semester1Btn" class="btn-semester active" onclick="switchSemester('1')">1학기</button>
-                <button id="semester2Btn" class="btn-semester" onclick="switchSemester('2')">2학기</button>
+        <div class="file-controls" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button class="btn" onclick="downloadExampleFile()" style="background: #17a2b8;">예시파일</button>
+                <button class="btn" onclick="document.getElementById('csvFile').click()" style="background: var(--accent);">파일선택</button>
+                <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                <div class="semester-buttons">
+                    <button id="semester1Btn" class="btn-semester active" onclick="switchSemester('1')">1학기</button>
+                    <button id="semester2Btn" class="btn-semester" onclick="switchSemester('2')">2학기</button>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn" onclick="addRow()">행 추가</button>
+                <button class="btn btn-success" onclick="saveAnnualHours()">저장</button>
             </div>
         </div>
     </div>
@@ -86,11 +84,6 @@
         <tbody id="annualHoursBody">
         </tbody>
     </table>
-    
-    <div style="margin-top: 20px; text-align: center;">
-        <button class="btn" onclick="addRow()">행 추가</button>
-        <button class="btn btn-success" onclick="saveAnnualHours()">저장</button>
-    </div>
 </div>
 
 
@@ -153,16 +146,14 @@ function init() {
     
     // 페이지 로드 시 데이터 불러오기 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
     setTimeout(() => {
-        console.log('[연간시수표] 페이지 초기화, 데이터 불러오기 시작');
         loadAnnualDataFromServer();
     }, 200);
 }
 
-// 서버에서 연간시수표 데이터 불러오기
+// localStorage에서 연간시수표 데이터 불러오기
 function loadAnnualDataFromServer() {
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
-        console.log('[연간시수표] 로그인 정보 없음');
         renderAnnualTable([]);
         return;
     }
@@ -178,46 +169,25 @@ function loadAnnualDataFromServer() {
     
     const nickname = loginInfo.nickname;
     if (!nickname) {
-        console.log('[연간시수표] 닉네임 없음');
         renderAnnualTable([]);
         return;
     }
     
-    console.log(`[연간시수표 불러오기 시작] 닉네임: ${nickname}, 학기: ${currentSemester}`);
+    // localStorage에서 불러오기
+    const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+    const storedData = localStorage.getItem(storageKey);
     
-    fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${currentSemester}`)
-        .then(response => {
-            console.log(`[연간시수표] 서버 응답 상태: ${response.status}`);
-            if (!response.ok) {
-                return response.json().then(err => {
-                    console.error(`[연간시수표] 서버 오류: ${err.message || `HTTP ${response.status}`}`);
-                    throw new Error(err.message || `HTTP ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(result => {
-            console.log(`[연간시수표] 서버 응답 결과:`, result);
-            if (result.success && result.data) {
-                const dataArray = Array.isArray(result.data) ? result.data : [];
-                console.log(`[연간시수표 불러오기 성공] 학기: ${currentSemester}, 데이터 행 수: ${dataArray.length}`);
-                if (dataArray.length > 0) {
-                    console.log(`[연간시수표] 첫 번째 행 데이터:`, dataArray[0]);
-                    console.log(`[연간시수표] 마지막 행 데이터:`, dataArray[dataArray.length - 1]);
-                } else {
-                    console.log(`[연간시수표] 데이터가 비어있습니다.`);
-                }
-                renderAnnualTable(dataArray);
-            } else {
-                console.log(`[연간시수표 불러오기] 학기: ${currentSemester}, 데이터 없음 (success: ${result.success})`);
-                renderAnnualTable([]);
-            }
-        })
-        .catch(error => {
-            console.error('[연간시수표 불러오기 오류]', error);
-            console.error('[연간시수표] 오류 상세:', error.stack);
+    if (storedData) {
+        try {
+            const dataArray = JSON.parse(storedData);
+            renderAnnualTable(dataArray);
+        } catch (e) {
+            console.error('[연간시수표] localStorage 데이터 파싱 오류:', e);
             renderAnnualTable([]);
-        });
+        }
+    } else {
+        renderAnnualTable([]);
+    }
 }
 
 function switchSemester(semester) {
@@ -512,9 +482,16 @@ function applyCSVToAnnualTable(rows) {
     filteredRows.forEach((row, rowIdx) => {
         const rowData = {};
         
-        // 주 (1번째 열)
+        // 주 (1번째 열) - CSV에서는 숫자만 읽고, 저장 시 학기 정보 추가
         if (columnIndexes['주'] < row.length) {
-            rowData['주'] = row[columnIndexes['주']] || '';
+            const weekValue = (row[columnIndexes['주']] || '').trim();
+            // 숫자만 추출 (이미 "1학기 1주" 형식이면 그대로 사용)
+            const weekNum = weekValue.replace(/[^0-9]/g, '');
+            if (weekNum) {
+                rowData['주'] = `${currentSemester}학기 ${weekNum}주`;
+            } else {
+                rowData['주'] = weekValue || '';
+            }
         }
         
         // 기간 (2번째 열)
@@ -551,7 +528,7 @@ function applyCSVToAnnualTable(rows) {
         }
     });
     
-    // 서버에 저장
+    // localStorage에 저장
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
         alert('로그인이 필요합니다.');
@@ -575,44 +552,17 @@ function applyCSVToAnnualTable(rows) {
         return;
     }
     
-    fetch(`${window.location.origin}/api/annual-data`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            nickname: nickname,
-            semester: currentSemester,
-            annualData: tableData
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => {
-                throw new Error(err.message || `HTTP ${response.status}`);
-            });
-        }
-        return response.json();
-    })
-    .then(result => {
-        if (result.success) {
-            console.log(`[CSV 저장 성공] 학기: ${currentSemester}, 저장된 데이터 행 수: ${tableData.length}`);
-            // 먼저 화면에 표시
-            renderAnnualTable(tableData);
-            alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었고 서버에 저장되었습니다.`);
-            // 저장 후 서버에서 다시 불러오기 (약간의 지연을 두어 저장이 완전히 완료된 후 불러오기)
-            setTimeout(() => {
-                loadAnnualDataFromServer();
-            }, 500);
-        } else {
-            console.error(`[CSV 저장 실패] 학기: ${currentSemester}, 오류: ${result.message}`);
-            alert('저장 중 오류가 발생했습니다: ' + result.message);
-        }
-    })
-    .catch(error => {
+    // localStorage에 저장
+    const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(tableData));
+        // 먼저 화면에 표시
+        renderAnnualTable(tableData);
+        alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었고 로컬에 저장되었습니다.`);
+    } catch (error) {
         console.error('[CSV 저장 오류]', error);
-        alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
-    });
+        alert('로컬 저장 중 오류가 발생했습니다: ' + error.message);
+    }
 }
 
 function saveAnnualHours() {
@@ -624,9 +574,19 @@ function saveAnnualHours() {
     rows.forEach(row => {
         const rowData = {};
         
-        // 주
+        // 주 - 학기 정보가 없으면 추가
         const weekInput = row.querySelector('.week-input');
-        if (weekInput) rowData['주'] = weekInput.value || '';
+        if (weekInput) {
+            let weekValue = weekInput.value.trim();
+            // 숫자만 있는 경우 학기 정보 추가
+            if (weekValue && !weekValue.includes('학기')) {
+                const weekNum = weekValue.replace(/[^0-9]/g, '');
+                if (weekNum) {
+                    weekValue = `${currentSemester}학기 ${weekNum}주`;
+                }
+            }
+            rowData['주'] = weekValue || '';
+        }
         
         // 기간
         const periodInput = row.querySelector('.period-input');
@@ -657,7 +617,7 @@ function saveAnnualHours() {
     // 합계 행 업데이트
     addTotalRow();
     
-    // 서버에 저장
+    // localStorage에 저장
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
         alert('로그인이 필요합니다.');
@@ -681,42 +641,15 @@ function saveAnnualHours() {
         return;
     }
     
-    fetch(`${window.location.origin}/api/annual-data`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            nickname: nickname,
-            semester: currentSemester,
-            annualData: tableData
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => {
-                throw new Error(err.message || `HTTP ${response.status}`);
-            });
-        }
-        return response.json();
-    })
-    .then(result => {
-        if (result.success) {
-            console.log(`[연간시수표 저장 성공] 학기: ${currentSemester}, 저장된 데이터 행 수: ${tableData.length}`);
-            alert(`${currentSemester}학기 연간시수표가 서버에 저장되었습니다.`);
-            // 저장 후 서버에서 다시 불러오기 (약간의 지연을 두어 저장이 완전히 완료된 후 불러오기)
-            setTimeout(() => {
-                loadAnnualDataFromServer();
-            }, 300);
-        } else {
-            console.error(`[연간시수표 저장 실패] 학기: ${currentSemester}, 오류: ${result.message}`);
-            alert('저장 중 오류가 발생했습니다: ' + result.message);
-        }
-    })
-    .catch(error => {
+    // localStorage에 저장
+    const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(tableData));
+        alert(`${currentSemester}학기 연간시수표가 로컬에 저장되었습니다.`);
+    } catch (error) {
         console.error('[연간시수표 저장 오류]', error);
-        alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
-    });
+        alert('로컬 저장 중 오류가 발생했습니다: ' + error.message);
+    }
 }
 
 // 빈 행 추가 함수
@@ -729,7 +662,12 @@ function addRow() {
     }
     
     const rowIndex = tbody.querySelectorAll('.data-row').length;
-    const row = createDataRow({}, rowIndex);
+    // 새 행의 주차 번호 자동 생성 (현재 학기 정보 포함)
+    const newWeekNumber = rowIndex + 1;
+    const rowData = {
+        '주': `${currentSemester}학기 ${newWeekNumber}주`
+    };
+    const row = createDataRow(rowData, rowIndex);
     tbody.appendChild(row);
     
     // 합계 행 다시 추가
@@ -746,17 +684,14 @@ if (document.readyState === 'loading') {
 
 // 페이지 표시 시 데이터 다시 불러오기 (브라우저 뒤로가기 등)
 window.addEventListener('pageshow', function(event) {
-    console.log('[연간시수표] pageshow 이벤트, persisted:', event.persisted);
     // 페이지가 캐시에서 복원된 경우 또는 일반 로드인 경우 모두 데이터 다시 불러오기
     setTimeout(() => {
-        console.log('[연간시수표] 페이지 표시 시 데이터 다시 불러오기');
         loadAnnualDataFromServer();
     }, 200);
 });
 
 // 페이지 포커스 시에도 데이터 다시 불러오기 (다른 탭에서 돌아올 때)
 window.addEventListener('focus', function() {
-    console.log('[연간시수표] 페이지 포커스, 데이터 다시 불러오기');
     setTimeout(() => {
         loadAnnualDataFromServer();
     }, 300);
