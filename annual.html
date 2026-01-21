@@ -133,26 +133,61 @@ function init() {
         return;
     }
     
-    renderAnnualTable();
+    loadAnnualDataFromServer();
     setupCSVLoader();
+}
+
+// 서버에서 연간시수표 데이터 불러오기
+function loadAnnualDataFromServer() {
+    const loginInfoStr = localStorage.getItem('timetable_login');
+    if (!loginInfoStr) {
+        renderAnnualTable([]);
+        return;
+    }
+    
+    let loginInfo;
+    try {
+        loginInfo = JSON.parse(loginInfoStr);
+    } catch (e) {
+        renderAnnualTable([]);
+        return;
+    }
+    
+    const nickname = loginInfo.nickname;
+    if (!nickname) {
+        renderAnnualTable([]);
+        return;
+    }
+    
+    fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${currentSemester}`)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.message || `HTTP ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.success && result.data) {
+                renderAnnualTable(result.data);
+            } else {
+                renderAnnualTable([]);
+            }
+        })
+        .catch(error => {
+            console.error('연간시수표 불러오기 오류:', error);
+            renderAnnualTable([]);
+        });
 }
 
 function switchSemester() {
     const select = document.getElementById('semesterSelect');
     currentSemester = select.value;
-    renderAnnualTable();
+    loadAnnualDataFromServer();
 }
 
-function renderAnnualTable() {
-    const saved = localStorage.getItem('school_v5_final');
-    let annualData = [];
-    
-    if (saved) {
-        const state = JSON.parse(saved);
-        const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
-        annualData = state[key] || [];
-    }
-    
+function renderAnnualTable(annualData = []) {
     const tbody = document.getElementById('annualHoursBody');
     tbody.innerHTML = '';
     
@@ -302,29 +337,8 @@ function updateRowDataByElement(element, column, value) {
 }
 
 function updateRowData(rowIndex, column, value) {
-    const saved = localStorage.getItem('school_v5_final');
-    const state = saved ? JSON.parse(saved) : {
-        classCount: 3,
-        periodCount: 7,
-        subjectSheets: [],
-        classData: {},
-        preferences: {},
-        currentWeek: new Date(),
-        annualHours: {}
-    };
-    
-    const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
-    if (!state[key]) state[key] = [];
-    
-    if (rowIndex >= state[key].length) {
-        // 새 행 추가
-        while (state[key].length <= rowIndex) {
-            state[key].push({});
-        }
-    }
-    
-    state[key][rowIndex][column] = value;
-    localStorage.setItem('school_v5_final', JSON.stringify(state));
+    // 실시간 저장은 제거하고, 저장 버튼을 눌러야만 서버에 저장됨
+    // 데이터는 화면에만 반영되고, 저장 버튼을 눌러야 서버에 저장됨
 }
 
 function setupCSVLoader() {
@@ -419,20 +433,6 @@ function applyCSVToAnnualTable(rows) {
         '진로': 166   // 167번째 열 (인덱스 166)
     };
     
-    const saved = localStorage.getItem('school_v5_final');
-    const state = saved ? JSON.parse(saved) : {
-        classCount: 3,
-        periodCount: 7,
-        subjectSheets: [],
-        classData: {},
-        preferences: {},
-        currentWeek: new Date(),
-        annualHours: {}
-    };
-    
-    const key = currentSemester === '1' ? 'annualTableData1' : 'annualTableData2';
-    state[key] = [];
-    
     // 1열(주 열)이 비어있는 행 찾기
     const emptyFirstColumnRows = [];
     dataRows.forEach((row, rowIdx) => {
@@ -454,6 +454,7 @@ function applyCSVToAnnualTable(rows) {
         }
     }
     
+    const tableData = [];
     filteredRows.forEach((row, rowIdx) => {
         const rowData = {};
         
@@ -492,13 +493,65 @@ function applyCSVToAnnualTable(rows) {
         rowData['계'] = total;
         
         if (Object.keys(rowData).length > 0) {
-            state[key].push(rowData);
+            tableData.push(rowData);
         }
     });
     
-    localStorage.setItem('school_v5_final', JSON.stringify(state));
-    renderAnnualTable();
-    alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었습니다.`);
+    // 서버에 저장
+    const loginInfoStr = localStorage.getItem('timetable_login');
+    if (!loginInfoStr) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    let loginInfo;
+    try {
+        loginInfo = JSON.parse(loginInfoStr);
+    } catch (e) {
+        alert('로그인 정보를 불러올 수 없습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    const nickname = loginInfo.nickname;
+    if (!nickname) {
+        alert('로그인 정보가 올바르지 않습니다.');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    fetch(`${window.location.origin}/api/annual-data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            nickname: nickname,
+            semester: currentSemester,
+            annualData: tableData
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.message || `HTTP ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.success) {
+            alert(`CSV 데이터가 ${currentSemester}학기 연간시수표에 적용되었고 서버에 저장되었습니다.`);
+            loadAnnualDataFromServer();
+        } else {
+            alert('저장 중 오류가 발생했습니다: ' + result.message);
+        }
+    })
+    .catch(error => {
+        console.error('CSV 저장 오류:', error);
+        alert('서버 저장 중 오류가 발생했습니다: ' + error.message);
+    });
 }
 
 function saveAnnualHours() {
@@ -589,6 +642,8 @@ function saveAnnualHours() {
     .then(result => {
         if (result.success) {
             alert(`${currentSemester}학기 연간시수표가 서버에 저장되었습니다.`);
+            // 저장 후 서버에서 다시 불러오기
+            loadAnnualDataFromServer();
         } else {
             alert('저장 중 오류가 발생했습니다: ' + result.message);
         }
