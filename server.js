@@ -523,10 +523,16 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                     // 저장 후 확인을 위해 다시 불러오기
                     const savedData = await getUserData(nickname);
                     if (savedData && savedData[key]) {
-                        console.log(`[연간시수표 저장 확인] 저장된 데이터 행 수: ${savedData[key].length}`);
+                        const savedArray = Array.isArray(savedData[key]) ? savedData[key] : [];
+                        console.log(`[연간시수표 저장 확인] 저장된 데이터 행 수: ${savedArray.length}`);
+                        if (savedArray.length !== annualData.length) {
+                            console.warn(`[연간시수표 저장 경고] 저장하려던 데이터(${annualData.length}행)와 저장된 데이터(${savedArray.length}행)가 다릅니다.`);
+                        }
+                    } else {
+                        console.error(`[연간시수표 저장 확인 실패] 저장된 데이터를 불러올 수 없습니다.`);
                     }
                     res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, message: `${semester}학기 연간시수표가 저장되었습니다.` }));
+                    res.end(JSON.stringify({ success: true, message: `${semester}학기 연간시수표가 저장되었습니다.`, savedRowCount: annualData.length }));
                 } else {
                     console.error(`[연간시수표 저장 실패] 닉네임: ${nickname}, 학기: ${semester}`);
                     res.writeHead(500);
