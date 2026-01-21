@@ -8,13 +8,31 @@ node server.js
 ```
 브라우저에서 `http://localhost:3000` 접속
 
-### 서버 배포
-자세한 배포 가이드는 [DEPLOY.md](./DEPLOY.md)를 참조하세요.
+### 웹호스팅 배포
+
+이 애플리케이션은 웹호스팅 환경에서 실행할 수 있도록 최적화되어 있습니다.
+
+**주요 특징:**
+- ✅ 환경 변수 기반 설정 (PORT, DATABASE_URL 등)
+- ✅ PostgreSQL 데이터베이스 지원 (선택사항)
+- ✅ 파일 시스템 저장 지원 (데이터베이스 없이도 작동)
+- ✅ 보안 강화된 경로 처리
+- ✅ 프로덕션 환경 최적화
 
 **추천 배포 플랫폼:**
 - 🚂 [Railway](https://railway.app) - 가장 간단
-- 🎨 [Render](https://render.com) - 무료 플랜 제공
+- 🎨 [Render](https://render.com) - 무료 플랜 제공 (데이터베이스 가이드: [RENDER_DATABASE_GUIDE.md](./RENDER_DATABASE_GUIDE.md))
 - ☁️ [Heroku](https://heroku.com) - 전통적인 PaaS
+- 🌐 [Vercel](https://vercel.com) - 서버리스 함수 지원
+- 🐳 [Fly.io](https://fly.io) - Docker 기반 배포
+
+**환경 변수 설정:**
+- `PORT`: 서버 포트 (대부분의 플랫폼에서 자동 설정)
+- `NODE_ENV`: `production` 또는 `development` (기본값: `development`)
+- `DATABASE_URL`: PostgreSQL 연결 문자열 (선택사항, 없으면 파일 시스템 사용)
+- `ALLOWED_ORIGIN`: CORS 허용 도메인 (선택사항, 기본값: `*`)
+
+자세한 배포 가이드는 [DEPLOY.md](./DEPLOY.md)를 참조하세요.
 
 ---
 
