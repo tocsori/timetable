@@ -5,8 +5,12 @@ const url = require('url');
 const querystring = require('querystring');
 
 const PORT = process.env.PORT || 3000;
-const ACCOUNTS_FILE = './accounts.json';
-const DATA_DIR = './data';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// 웹호스팅 환경을 위한 절대 경로 사용
+const BASE_DIR = __dirname;
+const ACCOUNTS_FILE = path.join(BASE_DIR, 'accounts.json');
+const DATA_DIR = path.join(BASE_DIR, 'data');
 const DATABASE_URL = process.env.DATABASE_URL;
 
 // PostgreSQL 클라이언트 (DATABASE_URL이 있을 때만 사용)
@@ -15,7 +19,9 @@ if (DATABASE_URL) {
     const { Client } = require('pg');
     dbClient = new Client({
         connectionString: DATABASE_URL,
-        ssl: DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : false
+        ssl: DATABASE_URL.includes('render.com') || DATABASE_URL.includes('amazonaws.com') || DATABASE_URL.includes('heroku') 
+            ? { rejectUnauthorized: false } 
+            : false
     });
     
     // 데이터베이스 연결 및 테이블 생성
@@ -38,8 +44,26 @@ if (DATABASE_URL) {
                 CREATE TABLE IF NOT EXISTS user_data (
                     nickname VARCHAR(255) PRIMARY KEY,
                     data TEXT NOT NULL,
+                    annual_data_1 TEXT,
+                    annual_data_2 TEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+            `);
+        })
+        .then(() => {
+            // 기존 테이블에 컬럼이 없으면 추가 (마이그레이션)
+            return dbClient.query(`
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='user_data' AND column_name='annual_data_1') THEN
+                        ALTER TABLE user_data ADD COLUMN annual_data_1 TEXT;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='user_data' AND column_name='annual_data_2') THEN
+                        ALTER TABLE user_data ADD COLUMN annual_data_2 TEXT;
+                    END IF;
+                END $$;
             `);
         })
         .then(() => {
@@ -47,6 +71,11 @@ if (DATABASE_URL) {
         })
         .catch(err => {
             console.error('데이터베이스 연결 오류:', err);
+            // 프로덕션 환경에서는 데이터베이스 연결 실패 시 프로세스 종료 고려
+            if (NODE_ENV === 'production') {
+                console.error('프로덕션 환경에서 데이터베이스 연결 실패. 서버를 종료합니다.');
+                process.exit(1);
+            }
         });
 }
 
@@ -168,7 +197,7 @@ async function getUserData(nickname) {
     }
 }
 
-// 사용자 데이터 저장 (PostgreSQL 또는 파일 시스템)
+    // 사용자 데이터 저장 (PostgreSQL 또는 파일 시스템)
 async function saveUserData(nickname, data) {
     if (dbClient) {
         try {
@@ -194,10 +223,66 @@ async function saveUserData(nickname, data) {
     }
 }
 
+// 연간시수표 데이터 저장 (PostgreSQL 또는 파일 시스템)
+async function saveAnnualData(nickname, semester, annualData) {
+    if (dbClient) {
+        try {
+            const dataJson = JSON.stringify(annualData);
+            const columnName = semester === '1' ? 'annual_data_1' : 'annual_data_2';
+            await dbClient.query(
+                `INSERT INTO user_data (nickname, ${columnName}) VALUES ($1, $2) ON CONFLICT (nickname) DO UPDATE SET ${columnName} = $2, updated_at = CURRENT_TIMESTAMP`,
+                [nickname, dataJson]
+            );
+            return true;
+        } catch (error) {
+            console.error('연간시수표 데이터 저장 오류:', error);
+            return false;
+        }
+    } else {
+        try {
+            const annualFilePath = path.join(DATA_DIR, `${nickname}_annual_${semester}.json`);
+            ensureDataDir();
+            fs.writeFileSync(annualFilePath, JSON.stringify(annualData, null, 2), 'utf8');
+            return true;
+        } catch (error) {
+            console.error('연간시수표 파일 저장 오류:', error);
+            return false;
+        }
+    }
+}
+
+// 연간시수표 데이터 읽기 (PostgreSQL 또는 파일 시스템)
+async function getAnnualData(nickname, semester) {
+    if (dbClient) {
+        try {
+            const columnName = semester === '1' ? 'annual_data_1' : 'annual_data_2';
+            const result = await dbClient.query(`SELECT ${columnName} FROM user_data WHERE nickname = $1`, [nickname]);
+            if (result.rows.length > 0 && result.rows[0][columnName]) {
+                return JSON.parse(result.rows[0][columnName]);
+            }
+        } catch (error) {
+            console.error('연간시수표 데이터 조회 오류:', error);
+        }
+        return null;
+    } else {
+        try {
+            const annualFilePath = path.join(DATA_DIR, `${nickname}_annual_${semester}.json`);
+            if (fs.existsSync(annualFilePath)) {
+                const data = fs.readFileSync(annualFilePath, 'utf8');
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error('연간시수표 파일 읽기 오류:', error);
+        }
+        return null;
+    }
+}
+
 // API 요청 처리
 function handleAPI(req, res, pathname, method, parsedUrl) {
-    // CORS 헤더 설정
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // CORS 헤더 설정 (프로덕션에서는 특정 도메인만 허용하도록 개선 가능)
+    const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');
@@ -500,6 +585,77 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
     }
 
 
+    // 연간시수표 데이터 불러오기 API
+    if (pathname === '/api/annual-data' && method === 'GET') {
+        const nickname = parsedUrl.query.nickname;
+        const semester = parsedUrl.query.semester || '1';
+        
+        if (!nickname) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ success: false, message: '닉네임이 필요합니다.' }));
+            return;
+        }
+
+        (async () => {
+            try {
+                const data = await getAnnualData(nickname, semester);
+                if (data) {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: data }));
+                } else {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, data: [] }));
+                }
+            } catch (error) {
+                console.error('연간시수표 데이터 불러오기 오류:', error);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: '연간시수표 데이터 불러오기 중 오류가 발생했습니다.' }));
+            }
+        })();
+        return;
+    }
+
+    // 연간시수표 데이터 저장 API
+    if (pathname === '/api/annual-data' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { nickname, semester, annualData } = data;
+
+                if (!nickname || !semester || !annualData) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '닉네임, 학기, 데이터가 필요합니다.' }));
+                    return;
+                }
+
+                if (semester !== '1' && semester !== '2') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '학기는 1 또는 2여야 합니다.' }));
+                    return;
+                }
+
+                console.log(`[연간시수표 데이터 저장] 닉네임: ${nickname}, 학기: ${semester}`);
+
+                if (await saveAnnualData(nickname, semester, annualData)) {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, message: '연간시수표 데이터가 저장되었습니다.' }));
+                } else {
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ success: false, message: '연간시수표 데이터 저장 중 오류가 발생했습니다.' }));
+                }
+            } catch (error) {
+                console.error('연간시수표 데이터 저장 오류:', error);
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
+            }
+        });
+        return;
+    }
+
     // 알 수 없는 API 경로
     console.log(`[API] 알 수 없는 경로: ${method} ${pathname}`);
     res.writeHead(404);
@@ -518,45 +674,98 @@ const server = http.createServer((req, res) => {
     }
 
     // 정적 파일 서빙
-    let filePath = '.' + pathname;
-    if (filePath === './') {
-        filePath = './main.html';
+    // 경로 보안: 상위 디렉토리 접근 방지
+    let filePath = pathname;
+    if (filePath === '/' || filePath === '') {
+        filePath = '/main.html';
+    }
+    
+    // 상대 경로 및 상위 디렉토리 접근 방지
+    if (filePath.includes('..') || filePath.includes('~')) {
+        res.writeHead(403, { 'Content-Type': 'text/html' });
+        res.end('<h1>403 - 접근이 거부되었습니다</h1>', 'utf-8');
+        return;
+    }
+    
+    // 절대 경로로 변환
+    const fullPath = path.join(BASE_DIR, filePath);
+    
+    // BASE_DIR 밖으로 나가는 경로 방지
+    if (!fullPath.startsWith(BASE_DIR)) {
+        res.writeHead(403, { 'Content-Type': 'text/html' });
+        res.end('<h1>403 - 접근이 거부되었습니다</h1>', 'utf-8');
+        return;
     }
 
     // 파일 확장자 확인
-    const extname = String(path.extname(filePath)).toLowerCase();
+    const extname = String(path.extname(fullPath)).toLowerCase();
     const contentType = MIME_TYPES[extname] || 'application/octet-stream';
 
     // 파일 읽기
-    fs.readFile(filePath, (error, content) => {
+    fs.readFile(fullPath, (error, content) => {
         if (error) {
             if (error.code === 'ENOENT') {
                 res.writeHead(404, { 'Content-Type': 'text/html' });
                 res.end('<h1>404 - 파일을 찾을 수 없습니다</h1>', 'utf-8');
             } else {
-                res.writeHead(500);
-                res.end(`서버 오류: ${error.code}`, 'utf-8');
+                console.error('파일 읽기 오류:', error);
+                res.writeHead(500, { 'Content-Type': 'text/html' });
+                res.end(`<h1>500 - 서버 오류</h1><p>${NODE_ENV === 'development' ? error.message : '서버 내부 오류가 발생했습니다.'}</p>`, 'utf-8');
             }
         } else {
+            const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
             res.writeHead(200, { 
                 'Content-Type': contentType,
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': allowedOrigin
             });
             res.end(content, 'utf-8');
         }
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     if (!dbClient) {
         ensureDataDir();
     }
-    console.log(`서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
-    console.log(`브라우저에서 http://localhost:${PORT} 를 열어주세요.`);
+    
+    const host = process.env.HOST || '0.0.0.0';
+    console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
+    console.log(`환경: ${NODE_ENV}`);
+    
+    if (NODE_ENV === 'development') {
+        console.log(`로컬 접속: http://localhost:${PORT}`);
+    }
+    
     if (dbClient) {
         console.log(`데이터는 PostgreSQL 데이터베이스에 저장됩니다.`);
     } else {
-        console.log(`계정 정보는 ${ACCOUNTS_FILE} 파일에 저장됩니다.`);
-        console.log(`사용자 데이터는 ${DATA_DIR} 디렉토리에 저장됩니다.`);
+        console.log(`계정 정보는 파일 시스템에 저장됩니다.`);
+        console.log(`계정 파일: ${ACCOUNTS_FILE}`);
+        console.log(`데이터 디렉토리: ${DATA_DIR}`);
     }
+    
+    // 프로세스 종료 시 정리 작업
+    process.on('SIGTERM', () => {
+        console.log('SIGTERM 신호를 받았습니다. 서버를 종료합니다...');
+        if (dbClient) {
+            dbClient.end(() => {
+                console.log('데이터베이스 연결이 종료되었습니다.');
+                process.exit(0);
+            });
+        } else {
+            process.exit(0);
+        }
+    });
+    
+    process.on('SIGINT', () => {
+        console.log('\nSIGINT 신호를 받았습니다. 서버를 종료합니다...');
+        if (dbClient) {
+            dbClient.end(() => {
+                console.log('데이터베이스 연결이 종료되었습니다.');
+                process.exit(0);
+            });
+        } else {
+            process.exit(0);
+        }
+    });
 });
