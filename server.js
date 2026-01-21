@@ -422,22 +422,36 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
 
         (async () => {
             try {
+                console.log(`[연간시수표 불러오기 요청] 닉네임: ${nickname}, 학기: ${semester}`);
                 const userData = await getUserData(nickname);
                 if (userData) {
                     const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
-                    const annualData = userData[key] || [];
-                    console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${annualData.length}`);
+                    const annualData = userData[key];
+                    
+                    if (annualData === undefined) {
+                        console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 키 '${key}' 없음`);
+                        res.writeHead(200);
+                        res.end(JSON.stringify({ success: true, data: [] }));
+                        return;
+                    }
+                    
+                    const dataArray = Array.isArray(annualData) ? annualData : [];
+                    console.log(`[연간시수표 불러오기 성공] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${dataArray.length}`);
+                    if (dataArray.length > 0) {
+                        console.log(`[연간시수표] 첫 번째 행 샘플:`, JSON.stringify(dataArray[0]).substring(0, 100));
+                    }
                     res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, data: annualData }));
+                    res.end(JSON.stringify({ success: true, data: dataArray }));
                 } else {
                     console.log(`[연간시수표 불러오기] 닉네임: ${nickname}, 학기: ${semester}, 사용자 데이터 없음`);
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, data: [] }));
                 }
             } catch (error) {
-                console.error('연간시수표 불러오기 오류:', error);
+                console.error('[연간시수표 불러오기 오류]', error);
+                console.error('[연간시수표] 오류 스택:', error.stack);
                 res.writeHead(500);
-                res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다.' }));
+                res.end(JSON.stringify({ success: false, message: '연간시수표 불러오기 중 오류가 발생했습니다: ' + error.message }));
             }
         })();
         return;
@@ -493,21 +507,28 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                 const key = semester === '1' ? 'annualTableData1' : 'annualTableData2';
                 const otherKey = semester === '1' ? 'annualTableData2' : 'annualTableData1';
                 
-                // 다른 학기 데이터 보존 (이미 있으면 유지)
-                const otherSemesterData = userData[otherKey] || [];
-                
-                userData[key] = annualData;
-                // 다른 학기 데이터가 없었다면 빈 배열로 설정 (덮어쓰지 않음)
-                if (!userData[otherKey] && otherSemesterData.length === 0) {
+                // 다른 학기 데이터 보존 (이미 있으면 유지, 없으면 빈 배열로 초기화)
+                if (userData[otherKey] === undefined || userData[otherKey] === null) {
                     userData[otherKey] = [];
                 }
+                
+                // 현재 학기 데이터 저장
+                userData[key] = annualData;
 
                 console.log(`[연간시수표 저장] 닉네임: ${nickname}, 학기: ${semester}, 데이터 행 수: ${annualData.length}`);
+                console.log(`[연간시수표 저장] 다른 학기(${otherKey}) 데이터 행 수: ${userData[otherKey].length}`);
+                console.log(`[연간시수표 저장] 저장할 전체 userData 키:`, Object.keys(userData));
 
                 if (await saveUserData(nickname, userData)) {
+                    // 저장 후 확인을 위해 다시 불러오기
+                    const savedData = await getUserData(nickname);
+                    if (savedData && savedData[key]) {
+                        console.log(`[연간시수표 저장 확인] 저장된 데이터 행 수: ${savedData[key].length}`);
+                    }
                     res.writeHead(200);
                     res.end(JSON.stringify({ success: true, message: `${semester}학기 연간시수표가 저장되었습니다.` }));
                 } else {
+                    console.error(`[연간시수표 저장 실패] 닉네임: ${nickname}, 학기: ${semester}`);
                     res.writeHead(500);
                     res.end(JSON.stringify({ success: false, message: '연간시수표 저장 중 오류가 발생했습니다.' }));
                 }
