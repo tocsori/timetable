@@ -150,7 +150,7 @@ function init() {
     }, 200);
 }
 
-// localStorage에서 연간시수표 데이터 불러오기
+// 서버에서 연간시수표 데이터 불러오기
 function loadAnnualDataFromServer() {
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
@@ -173,21 +173,50 @@ function loadAnnualDataFromServer() {
         return;
     }
     
-    // localStorage에서 불러오기
-    const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
-    const storedData = localStorage.getItem(storageKey);
-    
-    if (storedData) {
-        try {
-            const dataArray = JSON.parse(storedData);
-            renderAnnualTable(dataArray);
-        } catch (e) {
-            console.error('[연간시수표] localStorage 데이터 파싱 오류:', e);
-            renderAnnualTable([]);
-        }
-    } else {
-        renderAnnualTable([]);
-    }
+    // 서버에서 불러오기
+    fetch(`${window.location.origin}/api/annual-data?nickname=${encodeURIComponent(nickname)}&semester=${currentSemester}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.success && result.data && result.data.length > 0) {
+                renderAnnualTable(result.data);
+            } else {
+                // 서버에 데이터가 없으면 localStorage에서 시도 (마이그레이션 지원)
+                const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+                const storedData = localStorage.getItem(storageKey);
+                
+                if (storedData) {
+                    try {
+                        const dataArray = JSON.parse(storedData);
+                        renderAnnualTable(dataArray);
+                        // localStorage에서 불러온 데이터를 서버에 저장
+                        saveAnnualHoursToServer(dataArray);
+                    } catch (e) {
+                        console.error('[연간시수표] localStorage 데이터 파싱 오류:', e);
+                        renderAnnualTable([]);
+                    }
+                } else {
+                    renderAnnualTable([]);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('[연간시수표] 서버 데이터 불러오기 오류:', error);
+            // 오류 시 localStorage에서 시도
+            const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+            const storedData = localStorage.getItem(storageKey);
+            
+            if (storedData) {
+                try {
+                    const dataArray = JSON.parse(storedData);
+                    renderAnnualTable(dataArray);
+                } catch (e) {
+                    console.error('[연간시수표] localStorage 데이터 파싱 오류:', e);
+                    renderAnnualTable([]);
+                }
+            } else {
+                renderAnnualTable([]);
+            }
+        });
 }
 
 function switchSemester(semester) {
@@ -617,7 +646,12 @@ function saveAnnualHours() {
     // 합계 행 업데이트
     addTotalRow();
     
-    // localStorage에 저장
+    // 서버에 저장
+    saveAnnualHoursToServer(tableData);
+}
+
+// 서버에 연간시수표 데이터 저장
+function saveAnnualHoursToServer(tableData) {
     const loginInfoStr = localStorage.getItem('timetable_login');
     if (!loginInfoStr) {
         alert('로그인이 필요합니다.');
@@ -641,15 +675,44 @@ function saveAnnualHours() {
         return;
     }
     
-    // localStorage에 저장
-    const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
-    try {
-        localStorage.setItem(storageKey, JSON.stringify(tableData));
-        alert(`${currentSemester}학기 연간시수표가 로컬에 저장되었습니다.`);
-    } catch (error) {
-        console.error('[연간시수표 저장 오류]', error);
-        alert('로컬 저장 중 오류가 발생했습니다: ' + error.message);
-    }
+    // 서버에 저장
+    fetch(`${window.location.origin}/api/annual-data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            nickname: nickname,
+            semester: currentSemester,
+            annualData: tableData
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            // 성공 시 localStorage에도 백업 저장 (오프라인 지원)
+            const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(tableData));
+            } catch (e) {
+                console.warn('localStorage 백업 저장 실패:', e);
+            }
+            alert(`${currentSemester}학기 연간시수표가 서버에 저장되었습니다.`);
+        } else {
+            alert('서버 저장 실패: ' + (result.message || '알 수 없는 오류'));
+        }
+    })
+    .catch(error => {
+        console.error('[연간시수표] 서버 저장 오류:', error);
+        // 서버 저장 실패 시 localStorage에 저장 (오프라인 지원)
+        const storageKey = `annual_data_${nickname}_semester${currentSemester}`;
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(tableData));
+            alert(`${currentSemester}학기 연간시수표가 로컬에 저장되었습니다. (서버 연결 실패)`);
+        } catch (e) {
+            alert('저장 중 오류가 발생했습니다: ' + error.message);
+        }
+    });
 }
 
 // 빈 행 추가 함수
