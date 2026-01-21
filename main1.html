@@ -129,7 +129,7 @@
 <div class="week-header">
     <div id="weekDisplay"></div>
     <div class="nav-buttons">
-        <button class="btn" onclick="location.href='annual.html'">연간시수표</button>
+        <button class="btn" onclick="localStorage.setItem('annual_semester', '1'); location.href='annual.html'">연간시수표</button>
         <button class="btn" onclick="location.href='admin.html'">관리자 페이지</button>
         <button class="btn" onclick="logout()" style="background: #dc3545;">로그아웃</button>
     </div>
@@ -140,7 +140,7 @@
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <label><strong>1학기</strong></label>
-            <button class="btn" onclick="location.href='main2.html'" style="background: #17a2b8; margin-left: 10px;">2학기로 이동</button>
+            <button class="btn" onclick="localStorage.setItem('annual_semester', '2'); location.href='main2.html'" style="background: #17a2b8; margin-left: 10px;">2학기로 이동</button>
             <div id="weekSelectorContainer" style="display: none; margin-left: 20px; align-items: center;">
                 <button class="btn" onclick="changeWeek(-1)" style="padding: 6px 12px; font-size: 16px;">&lt;</button>
                 <span id="annualWeekDisplay" style="margin: 0 10px; font-weight: bold; min-width: 80px; text-align: center; display: inline-block;"></span>
