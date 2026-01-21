@@ -68,6 +68,14 @@
     </div>
     
     <div class="info-box">
+        <h3>📅 요일별 수업 수 설정</h3>
+        <p>각 요일별로 수업이 진행되는 교시 수를 설정할 수 있습니다. 설정한 교시 수를 초과하는 교시는 자동으로 비활성화됩니다.</p>
+        <div class="preference-settings">
+            <div id="dayPeriodLimitsContainer"></div>
+        </div>
+    </div>
+    
+    <div class="info-box">
         <h3>데이터 관리</h3>
         <p>전체 데이터를 초기화하거나 백업할 수 있습니다.</p>
         <div style="margin-top: 15px;">
@@ -112,12 +120,14 @@ function loadDataFromServer() {
                 document.getElementById('periodCount').value = 6;
             }
             renderPreferences();
+            renderDayPeriodLimits();
         })
         .catch(error => {
             console.error('데이터 불러오기 오류:', error);
             document.getElementById('classCount').value = 5;
             document.getElementById('periodCount').value = 6;
             renderPreferences();
+            renderDayPeriodLimits();
         });
 }
 
@@ -328,6 +338,128 @@ function updatePreference(subject) {
         .catch(error => {
             console.error('선호교시 저장 오류:', error);
             alert('선호교시 저장 중 오류가 발생했습니다.');
+        });
+}
+
+// 요일별 수업 수 설정 렌더링
+function renderDayPeriodLimits() {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let dayPeriodLimits = {};
+            let periodCount = 6;
+            
+            if (result.success && result.data) {
+                dayPeriodLimits = result.data.dayPeriodLimits || {};
+                periodCount = result.data.periodCount || 6;
+            }
+            
+            const container = document.getElementById('dayPeriodLimitsContainer');
+            container.innerHTML = '';
+            
+            const days = ['월', '화', '수', '목', '금'];
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'preference-item';
+                const limit = dayPeriodLimits[day] || '';
+                div.innerHTML = `
+                    <strong>${day}요일:</strong>
+                    <input type="number" id="dayLimit-${day}" value="${limit}" min="0" max="${periodCount}" placeholder="전체" style="width:80px" onchange="updateDayPeriodLimit('${day}')">
+                    <small>(예: 5 입력 시 6교시부터 비활성화, 비워두면 제한 없음)</small>
+                `;
+                container.appendChild(div);
+            });
+        })
+        .catch(error => {
+            console.error('요일별 수업 수 설정 불러오기 오류:', error);
+            // 기본값으로 렌더링
+            const container = document.getElementById('dayPeriodLimitsContainer');
+            container.innerHTML = '';
+            const days = ['월', '화', '수', '목', '금'];
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'preference-item';
+                div.innerHTML = `
+                    <strong>${day}요일:</strong>
+                    <input type="number" id="dayLimit-${day}" value="" min="0" max="8" placeholder="전체" style="width:80px" onchange="updateDayPeriodLimit('${day}')">
+                    <small>(예: 5 입력 시 6교시부터 비활성화, 비워두면 제한 없음)</small>
+                `;
+                container.appendChild(div);
+            });
+        });
+}
+
+function updateDayPeriodLimit(day) {
+    const input = document.getElementById(`dayLimit-${day}`);
+    const limit = input.value === '' ? null : parseInt(input.value);
+    
+    // 서버에서 데이터 불러오기
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    const nickname = loginInfo.nickname;
+    
+    fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
+        .then(response => response.json())
+        .then(result => {
+            let state;
+            if (result.success && result.data) {
+                state = result.data;
+            } else {
+                state = {
+                    classCount: 5,
+                    periodCount: 6,
+                    subjectSheets: [],
+                    classData: {},
+                    preferences: {},
+                    currentWeek: new Date().toISOString(),
+                    annualHours: {},
+                    weeklyData: {}
+                };
+            }
+            
+            if (!state.dayPeriodLimits) state.dayPeriodLimits = {};
+            
+            if (limit === null || limit === 0) {
+                delete state.dayPeriodLimits[day];
+            } else {
+                state.dayPeriodLimits[day] = limit;
+                
+                // 제한된 교시 이후의 모든 셀 내용 삭제
+                const periodCount = state.periodCount || 6;
+                for (let classNum = 1; classNum <= (state.classCount || 5); classNum++) {
+                    if (state.classData[classNum] && state.classData[classNum].timetable) {
+                        const dayIndex = ['월', '화', '수', '목', '금'].indexOf(day);
+                        if (dayIndex >= 0) {
+                            for (let r = limit; r < periodCount; r++) {
+                                // 고정된 셀이 아닌 경우에만 삭제
+                                const key = `${r}-${dayIndex}`;
+                                let isFixed = false;
+                                (state.subjectSheets || []).forEach(sheet => {
+                                    if (sheet.rules && sheet.rules[key] && sheet.rules[key].includes(classNum)) {
+                                        isFixed = true;
+                                    }
+                                });
+                                
+                                if (!isFixed) {
+                                    state.classData[classNum].timetable[r][dayIndex] = '';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 서버에 저장
+            return saveDataToServer(state);
+        })
+        .then(() => {
+            alert(`${day}요일 수업 수 제한이 저장되었습니다.`);
+        })
+        .catch(error => {
+            console.error('요일별 수업 수 저장 오류:', error);
+            alert('요일별 수업 수 저장 중 오류가 발생했습니다.');
         });
 }
 
