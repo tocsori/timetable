@@ -799,10 +799,11 @@ function saveCurrentWeekData() {
         targetWeeklyData[currentWeekIndex] = {};
     }
     
-    // 현재 주의 subjectSheets와 classData를 깊은 복사로 저장
+    // 현재 주의 subjectSheets, classData, disabledDays를 깊은 복사로 저장
     targetWeeklyData[currentWeekIndex] = {
         subjectSheets: JSON.parse(JSON.stringify(state.subjectSheets)),
-        classData: JSON.parse(JSON.stringify(state.classData))
+        classData: JSON.parse(JSON.stringify(state.classData)),
+        disabledDays: JSON.parse(JSON.stringify(state.disabledDays || {}))
     };
 }
 
@@ -815,6 +816,7 @@ function loadWeekDataFromStorage(weekIndex) {
         // 저장된 데이터가 없으면 초기화
         state.subjectSheets = [];
         state.classData = {};
+        state.disabledDays = {};
         
         // 학급 데이터 초기화
         for (let i = 1; i <= state.classCount; i++) {
@@ -831,6 +833,7 @@ function loadWeekDataFromStorage(weekIndex) {
         const weekData = weeklyData[weekIndex];
         state.subjectSheets = JSON.parse(JSON.stringify(weekData.subjectSheets));
         state.classData = JSON.parse(JSON.stringify(weekData.classData));
+        state.disabledDays = JSON.parse(JSON.stringify(weekData.disabledDays || {}));
     }
 }
 
@@ -886,14 +889,22 @@ function exportToExcel() {
     const masterWs = XLSX.utils.aoa_to_sheet(masterData);
     XLSX.utils.book_append_sheet(wb, masterWs, '고정교과');
     
-    // 학급별 시간표 시트
+    // 통합 시간표 시트 (모든 반을 하나의 시트에)
+    const timetableData = [];
+    
+    // 먼저 모든 반의 시간표 데이터 출력
     for (let i = 1; i <= state.classCount; i++) {
         if (!state.classData[i]) continue;
         const data = state.classData[i];
-        const classData = [];
-        classData.push([`${i}반 시간표`]);
-        classData.push(['교시', '월', '화', '수', '목', '금']);
         
+        // 반 구분선 및 헤더
+        if (i > 1) {
+            timetableData.push([]); // 빈 줄로 구분
+        }
+        timetableData.push([`${i}반 시간표`]);
+        timetableData.push(['교시', '월', '화', '수', '목', '금']);
+        
+        // 시간표 데이터
         for (let r = 0; r < state.periodCount; r++) {
             const row = [r + 1];
             for (let c = 0; c < 5; c++) {
@@ -904,21 +915,29 @@ function exportToExcel() {
                 });
                 row.push(fixedSub || data.timetable[r][c] || '');
             }
-            classData.push(row);
+            timetableData.push(row);
         }
         
-        classData.push([]);
-        classData.push(['과목', ...allSubjects]);
-        classData.push(['목표시수', ...data.targetHours]);
-        
+        // 메모
         if (data.memo) {
-            classData.push([]);
-            classData.push(['메모', data.memo]);
+            timetableData.push([]);
+            timetableData.push(['메모', data.memo]);
         }
-        
-        const ws = XLSX.utils.aoa_to_sheet(classData);
-        XLSX.utils.book_append_sheet(wb, ws, `${i}반`);
     }
+    
+    // 마지막에 과목과 목표시수 정보 한 번만 출력
+    timetableData.push([]);
+    timetableData.push(['과목', ...allSubjects]);
+    
+    // 각 반의 목표시수 출력
+    for (let i = 1; i <= state.classCount; i++) {
+        if (!state.classData[i]) continue;
+        const data = state.classData[i];
+        timetableData.push([`${i}반 목표시수`, ...data.targetHours]);
+    }
+    
+    const timetableWs = XLSX.utils.aoa_to_sheet(timetableData);
+    XLSX.utils.book_append_sheet(wb, timetableWs, '시간표');
     
     XLSX.writeFile(wb, `시간표_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
@@ -2100,8 +2119,10 @@ function copyAllSheetsToWeeks(startWeekIdx, endWeekIdx) {
     alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 모든 고정시간표 복사가 완료되었습니다.`);
 }
 
-// 요일 열 비활성화/활성화 토글 함수
+// 요일 비활성화 버튼: 요일 열 비활성화/활성화 토글 함수 (현재 주에만 적용)
 function toggleDayColumn(dayIndex) {
+    if (currentWeekIndex < 0) return; // 주가 선택되지 않은 경우
+    
     const dayName = days[dayIndex];
     if (!state.disabledDays) state.disabledDays = {};
     
@@ -2130,6 +2151,8 @@ function toggleDayColumn(dayIndex) {
         }
     }
     
+    // 현재 주의 데이터 저장
+    saveCurrentWeekData();
     saveAndRefresh();
 }
 
