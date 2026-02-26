@@ -215,11 +215,39 @@ async function saveUserData(nickname, data) {
         try {
             const filePath = getUserDataFile(nickname);
             fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+            const lastSavePath = path.join(DATA_DIR, `${nickname}_lastSave.txt`);
+            fs.writeFileSync(lastSavePath, new Date().toISOString(), 'utf8');
             return true;
         } catch (error) {
             console.error('데이터 파일 저장 오류:', error);
             return false;
         }
+    }
+}
+
+// 마지막 저장 시각 조회 (다른 PC에서도 표시용)
+async function getLastSaveTime(nickname) {
+    if (dbClient) {
+        try {
+            const result = await dbClient.query('SELECT updated_at FROM user_data WHERE nickname = $1', [nickname]);
+            if (result.rows.length > 0 && result.rows[0].updated_at) {
+                const d = result.rows[0].updated_at;
+                return d instanceof Date ? d.toISOString() : String(d);
+            }
+        } catch (error) {
+            console.error('마지막 저장 시각 조회 오류:', error);
+        }
+        return null;
+    } else {
+        try {
+            const lastSavePath = path.join(DATA_DIR, `${nickname}_lastSave.txt`);
+            if (fs.existsSync(lastSavePath)) {
+                return fs.readFileSync(lastSavePath, 'utf8').trim();
+            }
+        } catch (error) {
+            console.error('마지막 저장 시각 파일 읽기 오류:', error);
+        }
+        return null;
     }
 }
 
@@ -335,6 +363,37 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         return;
     }
 
+    // 비밀번호 확인 API (서버 저장 전 확인용)
+    if (pathname === '/api/accounts/verify-password' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { nickname, password } = data;
+                if (!nickname || !password) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, message: '닉네임과 비밀번호를 입력해주세요.' }));
+                    return;
+                }
+                const accounts = await getAccounts();
+                const account = accounts.find(acc => acc.nickname === nickname && acc.password === password);
+                if (account) {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true }));
+                } else {
+                    res.writeHead(401);
+                    res.end(JSON.stringify({ success: false, message: '비밀번호가 일치하지 않습니다.' }));
+                }
+            } catch (error) {
+                console.error('비밀번호 확인 오류:', error);
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: '잘못된 요청입니다.' }));
+            }
+        });
+        return;
+    }
+
     // 계정 목록 조회 API (관리용)
     if (pathname === '/api/accounts' && method === 'GET') {
         (async () => {
@@ -440,6 +499,33 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
         return;
     }
 
+    // 마지막 저장 시각 조회 API (다른 PC에서 로그인 시 표시용)
+    if (pathname === '/api/last-save' && method === 'GET') {
+        const nickname = parsedUrl.query.nickname;
+        if (!nickname) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ success: false, message: '닉네임이 필요합니다.' }));
+            return;
+        }
+        (async () => {
+            try {
+                const savedAt = await getLastSaveTime(nickname);
+                if (savedAt) {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, savedAt: savedAt }));
+                } else {
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, savedAt: null }));
+                }
+            } catch (error) {
+                console.error('마지막 저장 시각 조회 오류:', error);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: '조회 중 오류가 발생했습니다.' }));
+            }
+        })();
+        return;
+    }
+
     // 시간표 데이터 불러오기 API
     if (pathname === '/api/data' && method === 'GET') {
         const nickname = parsedUrl.query.nickname;
@@ -514,8 +600,9 @@ function handleAPI(req, res, pathname, method, parsedUrl) {
                 console.log(`[일반 데이터 저장] 닉네임: ${nickname}, 연간시수표 데이터 제외됨`);
 
                 if (await saveUserData(nickname, filteredStateData)) {
+                    const savedAt = await getLastSaveTime(nickname);
                     res.writeHead(200);
-                    res.end(JSON.stringify({ success: true, message: '데이터가 저장되었습니다.' }));
+                    res.end(JSON.stringify({ success: true, message: '데이터가 저장되었습니다.', savedAt: savedAt || new Date().toISOString() }));
                 } else {
                     res.writeHead(500);
                     res.end(JSON.stringify({ success: false, message: '데이터 저장 중 오류가 발생했습니다.' }));
