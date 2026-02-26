@@ -24,7 +24,7 @@
 <body>
 
 <div class="nav-buttons">
-    <button class="btn" onclick="history.back()">이전 페이지로 돌아가기</button>
+    <button class="btn" onclick="location.href='main.html?r='+Date.now()">이전 페이지로 돌아가기</button>
 </div>
 
 <div class="section">
@@ -131,6 +131,22 @@ function loadDataFromServer() {
         });
 }
 
+// 메인 페이지가 로컬에서 불러오므로, state를 로컬 스토리지에도 저장
+function saveStateToLocalStorage(state) {
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    if (!loginInfo || !loginInfo.nickname) return;
+    const nickname = loginInfo.nickname;
+    const stateToSave = { ...state };
+    delete stateToSave.annualTableData;
+    delete stateToSave.annualTableData1;
+    delete stateToSave.annualTableData2;
+    try {
+        localStorage.setItem('timetable_main_' + nickname, JSON.stringify(stateToSave));
+    } catch (e) {
+        console.error('로컬 저장 오류:', e);
+    }
+}
+
 // 서버에 데이터 저장
 function saveDataToServer(state) {
     const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
@@ -228,7 +244,7 @@ function updatePeriodCount() {
                 });
             }
             
-            // 서버에 저장
+            saveStateToLocalStorage(state);
             return saveDataToServer(state);
         })
         .then(() => {
@@ -327,7 +343,7 @@ function updatePreference(subject) {
             if (!state.preferences) state.preferences = {};
             state.preferences[subject] = selected;
             
-            // 서버에 저장
+            saveStateToLocalStorage(state);
             return saveDataToServer(state);
         })
         .catch(error => {
@@ -446,7 +462,7 @@ function updateDayPeriodLimit(day) {
                 }
             }
             
-            // 서버에 저장
+            saveStateToLocalStorage(state);
             return saveDataToServer(state);
         })
         .then(() => {
@@ -524,7 +540,7 @@ function updateClassCount() {
                 }
             }
             
-            // 서버에 저장
+            saveStateToLocalStorage(state);
             return saveDataToServer(state);
         })
         .then(() => {
@@ -545,6 +561,10 @@ function resetAllData() {
         return;
     }
     
+    const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
+    if (loginInfo && loginInfo.nickname) {
+        localStorage.removeItem('timetable_main_' + loginInfo.nickname);
+    }
     localStorage.removeItem('school_v5_final');
     alert('모든 데이터가 초기화되었습니다.');
     init();
@@ -641,6 +661,7 @@ function importBackup(event) {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
+                    saveStateToLocalStorage(serverData);
                     alert('백업 파일을 성공적으로 불러왔습니다.');
                     init();
                 } else {
