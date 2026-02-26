@@ -336,6 +336,12 @@ function init() {
     
     // 로컬에 저장된 데이터만 불러오기 (서버는 '서버에서 불러오기' 버튼으로만 연동)
     loadDataFromLocal();
+    
+    // 서버에서 불러오기 버튼으로 들어온 경우: 새로고침 후 서버에서 불러오기 진행
+    if (localStorage.getItem('main_doLoadFromServer') === '1') {
+        localStorage.removeItem('main_doLoadFromServer');
+        loadDataFromServer();
+    }
 }
 
 // 학기 전환 함수
@@ -1042,7 +1048,8 @@ function saveToServer() {
 // 서버에서 불러오기 (서버 데이터로 로컬 덮어쓰기)
 function loadFromServer() {
     if (!confirm('서버에 저장된 데이터로 덮어쓰시겠습니까?\n현재 로컬에만 있는 수정 내용은 사라질 수 있습니다.')) return;
-    loadDataFromServer();
+    localStorage.setItem('main_doLoadFromServer', '1');
+    location.reload();
 }
 
 // 파일 불러오기
