@@ -56,11 +56,11 @@
         .class-card th, .class-card td { font-size: 11px; min-width: 35px; }
         
         /* 통합 주간 시수 표 최소화 */
-        #unifiedHoursTable { width: fit-content; }
-        #unifiedHoursTable table { width: auto; font-size: 11px; margin: 3px 0; }
-        #unifiedHoursTable th, #unifiedHoursTable td { padding: 2px 4px; height: 18px; font-size: 10px; min-width: 30px; }
+        #unifiedHoursTable { width: 50%; }
+        #unifiedHoursTable table { width: 100%; table-layout: fixed; font-size: 11px; margin: 3px 0; }
+        #unifiedHoursTable th, #unifiedHoursTable td { padding: 2px 4px; height: 18px; font-size: 10px; width: 1%; text-align: center; }
         #unifiedHoursTable th { font-size: 10px; }
-        #unifiedHoursTable input { width: 35px; font-size: 10px; padding: 1px; }
+        #unifiedHoursTable input { width: 18px; font-size: 10px; padding: 1px; text-align: center; }
         
         .master-td { cursor: move; background: white; font-size: 10px; transition: 0.2s; user-select: none; }
         .master-td:hover { background: #eef5ff; border: 1px solid var(--accent); }
@@ -73,15 +73,15 @@
         .target-zero { background-color: var(--complete); font-weight: bold; }
         
         /* 과목별 색상 */
-        .subject-korean { color: #e74c3c; font-weight: bold; }
+        .subject-korean { color: #2563eb; font-weight: bold; } /* 파란색 */
         .subject-social { color: #3498db; font-weight: bold; }
         .subject-ethics { color: #9b59b6; font-weight: bold; }
         .subject-math { color: #e67e22; font-weight: bold; }
         .subject-science { color: #1abc9c; font-weight: bold; }
-        .subject-practical { color: #f39c12; font-weight: bold; }
+        .subject-practical { color: #b45309; font-weight: bold; } /* 황갈색 계열 (미술과 구분) */
         .subject-pe { color: #27ae60; font-weight: bold; }
         .subject-music { color: #e91e63; font-weight: bold; }
-        .subject-art { color: #ff9800; font-weight: bold; }
+        .subject-art { color: #ea580c; font-weight: bold; } /* 주황·빨강 계열 (실과와 구분) */
         .subject-english { color: #2196f3; font-weight: bold; }
         
         /* 드래그 앤 드롭 */
@@ -136,34 +136,11 @@
     </style>
 </head>
 <body>
-    <!--뒤로가기시 새로고침 및 연간시수표 데이터 다시 불러오기-->
     <script>
-        let isInitialLoad = true;
-        
         window.addEventListener("pageshow", function (event) {
-          if (event.persisted) {
-            // 뒤로가기/앞으로가기 시 전체 새로고침
-            location.reload();
-          } else if (!isInitialLoad) {
-            // 일반 페이지 로드가 아닌 경우에만 데이터 다시 불러오기 (중복 방지)
-            setTimeout(() => {
-              if (typeof loadAnnualDataOnInit === 'function') {
-                loadAnnualDataOnInit();
-              }
-            }, 500);
-          }
-          isInitialLoad = false;
+          if (event.persisted) location.reload();
         });
-        
-        // 페이지 포커스 시에도 데이터 다시 불러오기 (다른 탭에서 돌아올 때)
-        window.addEventListener('focus', function() {
-          setTimeout(() => {
-            if (typeof loadAnnualDataOnInit === 'function') {
-              loadAnnualDataOnInit();
-            }
-          }, 300);
-        });
-        </script>
+    </script>
 <!-- 정보수정 모달 -->
 <div id="editAccountModal" class="modal">
     <div class="modal-content">
@@ -218,32 +195,53 @@
     </div>
 </div>
 
+<!-- 주간시간표 생성 - 달력으로 주 선택 -->
+<div id="createWeeklyCalendarModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>주간시간표 생성</h2>
+            <span class="close" onclick="closeCreateWeeklyCalendarModal()">&times;</span>
+        </div>
+        <div class="form-group">
+            <label>해당 주의 날짜를 선택하세요</label>
+            <input type="date" id="createWeeklyDateInput" style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
+        </div>
+        <div class="form-group">
+            <label>주차 (숫자 입력)</label>
+            <input type="text" id="createWeeklyWeekNumberInput" placeholder="예: 2 (비워두면 주차 없이 표시)" style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
+        </div>
+        <div style="margin-top: 20px; text-align: right;">
+            <button type="button" class="btn" onclick="closeCreateWeeklyCalendarModal()" style="background: #6c757d; margin-right: 10px;">취소</button>
+            <button type="button" class="btn" style="background: #28a745;" onclick="confirmCreateWeeklyFromCalendar()">생성</button>
+        </div>
+    </div>
+</div>
+
 <!-- 주차 표시 -->
 <div class="week-header">
     <div id="weekDisplay"></div>
     <div class="nav-buttons">
-        <button class="btn" onclick="localStorage.setItem('annual_semester', currentSemester); location.href='annual.html'">연간시수표</button>
         <button class="btn" onclick="location.href='admin.html'">관리자 페이지</button>
         <button class="btn" onclick="showEditAccountModal()" style="background: #17a2b8;">정보수정</button>
         <button class="btn" onclick="logout()" style="background: #dc3545;">로그아웃</button>
     </div>
 </div>
 
-<!-- 연간시수표 선택 섹션 -->
 <div class="section" style="padding: 15px; margin-bottom: 20px;">
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <label><strong id="semesterLabel">1학기</strong></label>
             <button class="btn" id="switchSemesterBtn" onclick="switchSemester()" style="background: #17a2b8; margin-left: 10px;">2학기로 전환</button>
-            <div id="weekSelectorContainer" style="display: none; margin-left: 20px; align-items: center;">
-                <button class="btn" onclick="changeWeek(-1)" style="padding: 6px 12px; font-size: 16px;">&lt;</button>
-                <span id="annualWeekDisplay" style="margin: 0 10px; font-weight: bold; min-width: 80px; text-align: center; display: inline-block;"></span>
-                <button class="btn" onclick="changeWeek(1)" style="padding: 6px 12px; font-size: 16px;">&gt;</button>
-                <span id="periodDisplay" style="margin-left: 15px; font-weight: bold; color: var(--accent);"></span>
-            </div>
+            <label for="weekSelectDropdown" style="margin-left: 15px; font-weight: bold;">주간 시간표:</label>
+            <select id="weekSelectDropdown" onchange="onWeekDropdownChange(this)" style="min-width: 200px; padding: 6px 10px; font-size: 14px; border-radius: 6px; border: 1px solid #ced4da;"></select>
+            <button class="btn" id="goToDefaultTimetableBtn" onclick="goToDefaultTimetable()" style="background: #6c757d;">기본시간표로 이동</button>
+            <button class="btn" id="deleteCurrentWeeklyBtn" onclick="deleteCurrentWeeklyTimetable()" style="background: #dc3545;">현재 페이지 삭제하기</button>
+            <button class="btn" id="createWeeklyTimetableBtn" onclick="createNewWeeklyTimetable()" style="background: #28a745;">주간시간표 생성</button>
         </div>
         <div class="toolbar" style="margin-left: auto;">
+            <span id="lastServerSaveTime" style="font-size: 12px; color: #6c757d; margin-right: 10px;"></span>
             <button class="btn btn-save" onclick="saveToServer()">서버에 저장</button>
+            <button class="btn btn-load" onclick="loadFromServer()">서버에서 불러오기</button>
             <button class="btn btn-export" onclick="exportToExcel()">엑셀 내보내기</button>
             <button class="btn btn-import" onclick="document.getElementById('excelInput').click()">엑셀 불러오기</button>
             <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none">
@@ -253,7 +251,7 @@
 </div>
 
 <div class="section">
-    <h2>📊 전체 학급 주간 시수 및 달성도</h2>
+    <h2>📊 전체 학급 주간 시수 및 달성도 (주간 목표 시수를 먼저 작성해 주세요.)</h2>
     <div id="unifiedHoursTable"></div>
 </div>
 
@@ -264,14 +262,13 @@
         <select id="newSubName" style="width:120px;"></select>
         <input type="text" id="newSubTag" placeholder="태그 (예: 담임)" style="width:100px; padding: 5px; margin-right: 5px; border: 1px solid #ccc; border-radius: 3px;">
         <button class="btn" onclick="addSubjectSheet()">시트 생성</button>
-        <button class="btn" onclick="copyAllFixedTimetables()" style="background: #17a2b8;">모든 고정시간표 복사</button>
     </div>
 
     <div id="masterSheetsContainer"></div>
 </div>
 
 <div class="section" id="classTimetableSection">
-    <h2>🏫 학급별 시간표 관리 <span id="weekPeriodInfo" style="font-size: 12px; color: #666; font-weight: normal;"></span></h2>
+    <h2>🏫 학급별 시간표 <span id="currentWeekLabelDisplay" style="font-size: 16px; font-weight: normal; color: #666;"></span></h2>
     <div id="classGrid" class="class-grid"></div>
     <div id="unifiedMemoContainer" style="margin-top: 20px;">
         <h3 style="font-size: 14px; margin-bottom: 10px;">📝 메모</h3>
@@ -314,11 +311,12 @@ let state = {
     classData: {}, // { classNum: { timetable: [], targetHours: [], memo: "" } }
     preferences: {}, // { subject: [1, 2, 3] } - 선호하는 교시 배열
     currentWeek: new Date(), // 현재 주차
-    annualHours: {}, // 연간시수표 { subject: hours }
-    annualTableData: null, // 선택된 연간시수표 데이터
+    annualHours: {},
     memo: "", // 통합 메모
-    weeklyData1: {}, // 1학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {} } }
-    weeklyData2: {}, // 2학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {} } }
+    weeklyData1: {}, // 1학기 주별 데이터 { weekIndex: { subjectSheets: [], classData: {}, disabledDays: {} } }
+    weeklyData2: {}, // 2학기 주별 데이터
+    weekLabels1: { 0: "기본시간표" }, // 주간별 표시 이름
+    weekLabels2: { 0: "기본시간표" },
     disabledDays: {}, // { "월": true, "화": false } - 비활성화된 요일
     dayPeriodLimits: {} // { "수": 5 } - 요일별 수업 수 제한 (예: 수요일은 5교시까지)
 };
@@ -335,29 +333,191 @@ function init() {
     // 현재 학기 UI 업데이트
     updateSemesterUI();
     
-    // 서버에서 데이터 불러오기
-    loadDataFromServer();
+    // 로컬에 저장된 데이터만 불러오기 (서버는 '서버에서 불러오기' 버튼으로만 연동)
+    loadDataFromLocal();
 }
 
 // 학기 전환 함수
 function switchSemester() {
-    // 현재 주의 데이터 저장
-    if (currentWeekIndex >= 0) {
-        saveCurrentWeekData();
-    }
+    if (currentWeekIndex >= 0) saveCurrentWeekData();
     
-    // 학기 전환
     currentSemester = currentSemester === '1' ? '2' : '1';
     localStorage.setItem('main_semester', currentSemester);
     
-    // UI 업데이트
     updateSemesterUI();
+    ensureWeekLabelsExist();
+    currentWeekIndex = 0;
+    loadWeekDataFromStorage(0);
+    updateWeekDropdown();
+    renderAll();
+}
+
+// 주간 라벨 보정: 0주차는 항상 "기본시간표"로 표기
+function ensureWeekLabelsExist() {
+    if (!state.weekLabels1) state.weekLabels1 = {};
+    if (!state.weekLabels2) state.weekLabels2 = {};
+    state.weekLabels1[0] = "기본시간표";
+    state.weekLabels2[0] = "기본시간표";
+}
+
+// 주간 시간표 드롭다운 채우기 및 선택값 동기화
+function updateWeekDropdown() {
+    const sel = document.getElementById('weekSelectDropdown');
+    if (!sel) return;
+    const labels = currentSemester === '1' ? state.weekLabels1 : state.weekLabels2;
+    if (!labels) return;
     
-    // 현재 주 인덱스 초기화
-    currentWeekIndex = -1;
+    const indices = Object.keys(labels).map(Number).sort((a, b) => a - b);
+    sel.innerHTML = '';
+    indices.forEach(idx => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = labels[idx] || `${currentSemester}학기`;
+        sel.appendChild(opt);
+    });
+    if (currentWeekIndex >= 0 && indices.indexOf(currentWeekIndex) >= 0) {
+        sel.value = String(currentWeekIndex);
+    } else if (indices.length > 0) {
+        currentWeekIndex = indices[0];
+        sel.value = String(currentWeekIndex);
+    }
+    // 기본시간표(0주차)에서만 주간시간표 생성 버튼 표시
+    const createBtn = document.getElementById('createWeeklyTimetableBtn');
+    if (createBtn) createBtn.style.display = currentWeekIndex === 0 ? '' : 'none';
+    // 기본시간표일 때는 '기본시간표로 이동', '현재 페이지 삭제하기' 버튼 숨김
+    const goDefaultBtn = document.getElementById('goToDefaultTimetableBtn');
+    if (goDefaultBtn) goDefaultBtn.style.display = currentWeekIndex === 0 ? 'none' : '';
+    const deleteBtn = document.getElementById('deleteCurrentWeeklyBtn');
+    if (deleteBtn) deleteBtn.style.display = currentWeekIndex === 0 ? 'none' : '';
+    // 학급별 시간표 옆에 현재 주간시간표 레이블 표시
+    const labelEl = document.getElementById('currentWeekLabelDisplay');
+    if (labelEl) {
+        const currentLabel = labels[currentWeekIndex];
+        labelEl.textContent = currentLabel ? ' — ' + currentLabel : '';
+    }
+}
+
+// 드롭다운에서 주간 선택 시
+function onWeekDropdownChange(selectEl) {
+    const idx = parseInt(selectEl.value, 10);
+    if (isNaN(idx) || idx < 0) return;
+    if (currentWeekIndex >= 0) saveCurrentWeekData();
+    currentWeekIndex = idx;
+    loadWeekDataFromStorage(currentWeekIndex);
+    updateWeekDropdown();
+    renderAll();
+}
+
+// 현재 주간 시간표 삭제 (기본시간표는 삭제 불가)
+function deleteCurrentWeeklyTimetable() {
+    if (currentWeekIndex === 0) {
+        alert('기본시간표는 삭제할 수 없습니다.');
+        return;
+    }
+    const labels = currentSemester === '1' ? state.weekLabels1 : state.weekLabels2;
+    const weekLabel = labels[currentWeekIndex] || `${currentSemester}학기`;
+    if (!confirm(`"${weekLabel}" 주간 시간표를 삭제하시겠습니까?\n삭제 후 기본시간표로 이동합니다.`)) return;
     
-    // 연간시수표 데이터 다시 불러오기
-    loadAnnualDataOnInit();
+    const curLabels = currentSemester === '1' ? state.weekLabels1 : state.weekLabels2;
+    const curData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
+    delete curLabels[currentWeekIndex];
+    delete curData[currentWeekIndex];
+    
+    currentWeekIndex = 0;
+    loadWeekDataFromStorage(0);
+    updateWeekDropdown();
+    saveToLocalStorage();
+    renderAll();
+}
+
+// 기본시간표(0주차)로 이동
+function goToDefaultTimetable() {
+    if (currentWeekIndex === 0) return;
+    if (currentWeekIndex >= 0) saveCurrentWeekData();
+    currentWeekIndex = 0;
+    loadWeekDataFromStorage(0);
+    updateWeekDropdown();
+    renderAll();
+}
+
+// 선택한 날짜가 속한 주의 월요일 반환 (한국: 월~금 기준)
+function getMondayOfWeek(d) {
+    const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const day = date.getDay(); // 0=일, 1=월, ..., 6=토
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    return date;
+}
+
+// 해당 주 월~금 날짜로 라벨 문자열 생성 (예: 3.9~3.13)
+function getWeekRangeLabel(d) {
+    const mon = getMondayOfWeek(d);
+    const fri = new Date(mon);
+    fri.setDate(mon.getDate() + 4);
+    const m = mon.getMonth() + 1, d1 = mon.getDate();
+    const m2 = fri.getMonth() + 1, d2 = fri.getDate();
+    return m + '.' + d1 + '~' + m2 + '.' + d2;
+}
+
+// 주간시간표 생성 모달 열기 (달력으로 주 선택)
+function createNewWeeklyTimetable() {
+    saveCurrentWeekData();
+    const input = document.getElementById('createWeeklyDateInput');
+    const weekNumInput = document.getElementById('createWeeklyWeekNumberInput');
+    if (!input) return;
+    const today = new Date();
+    input.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    if (weekNumInput) weekNumInput.value = '';
+    document.getElementById('createWeeklyCalendarModal').style.display = 'block';
+}
+
+function closeCreateWeeklyCalendarModal() {
+    const modal = document.getElementById('createWeeklyCalendarModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function confirmCreateWeeklyFromCalendar() {
+    const input = document.getElementById('createWeeklyDateInput');
+    if (!input || !input.value) {
+        alert('날짜를 선택해 주세요.');
+        return;
+    }
+    const d = new Date(input.value + 'T12:00:00');
+    if (isNaN(d.getTime())) {
+        alert('올바른 날짜를 선택해 주세요.');
+        return;
+    }
+    const labels = currentSemester === '1' ? state.weekLabels1 : state.weekLabels2;
+    const weeklyData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
+    if (!labels) {
+        if (currentSemester === '1') state.weekLabels1 = {};
+        else state.weekLabels2 = {};
+    }
+    if (!weeklyData) {
+        if (currentSemester === '1') state.weeklyData1 = {};
+        else state.weeklyData2 = {};
+    }
+    const curLabels = currentSemester === '1' ? state.weekLabels1 : state.weekLabels2;
+    const curData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
+    const nextIdx = Math.max(0, ...Object.keys(curLabels).map(Number)) + 1;
+    const weekLabel = getWeekRangeLabel(d);
+    const weekNumEl = document.getElementById('createWeeklyWeekNumberInput');
+    const weekNum = weekNumEl ? weekNumEl.value.trim() : '';
+    const sem = currentSemester === '1' ? '1학기' : '2학기';
+    const label = weekNum ? sem + ' ' + weekNum + '주차(' + weekLabel + ')' : sem + ' (' + weekLabel + ')';
+    curLabels[nextIdx] = label;
+    curData[nextIdx] = {
+        subjectSheets: JSON.parse(JSON.stringify(state.subjectSheets)),
+        classData: JSON.parse(JSON.stringify(state.classData)),
+        disabledDays: JSON.parse(JSON.stringify(state.disabledDays || {}))
+    };
+    currentWeekIndex = nextIdx;
+    loadWeekDataFromStorage(currentWeekIndex);
+    updateWeekDropdown();
+    saveToLocalStorage();
+    renderAll();
+    closeCreateWeeklyCalendarModal();
+    alert('"' + label + '" 주간 시간표가 생성되었습니다.');
 }
 
 // 학기 UI 업데이트
@@ -373,166 +533,139 @@ function updateSemesterUI() {
     }
 }
 
-// 서버에서 데이터 불러오기
+// 로컬에 데이터 저장 (모든 편집은 로컬에만 반영, 서버는 '서버에 저장' 시에만 반영)
+function saveToLocalStorage() {
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) return;
+    const login = JSON.parse(loginInfo);
+    const nickname = login.nickname;
+    if (!nickname) return;
+    const stateToSave = { ...state };
+    delete stateToSave.annualTableData;
+    try {
+        localStorage.setItem(`timetable_main_${nickname}`, JSON.stringify(stateToSave));
+    } catch (e) {
+        console.error('로컬 저장 오류:', e);
+    }
+}
+
+// 로컬에서 데이터 불러오기 (최초 진입 또는 서버 미사용 시)
+function loadDataFromLocal() {
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) return;
+    let login;
+    try {
+        login = JSON.parse(loginInfo);
+    } catch (e) {
+        console.error('로그인 정보 파싱 오류:', e);
+        return;
+    }
+    const nickname = login.nickname;
+    if (!nickname) return;
+
+    const raw = localStorage.getItem(`timetable_main_${nickname}`);
+    
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            delete parsed.annualTableData;
+            delete parsed.annualTableData1;
+            delete parsed.annualTableData2;
+            Object.assign(state, parsed);
+            if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
+            if (!state.periodCount) state.periodCount = 7;
+            if (!state.annualHours) state.annualHours = {};
+            if (!state.weeklyData1) state.weeklyData1 = {};
+            if (!state.weeklyData2) state.weeklyData2 = {};
+            if (!state.weekLabels1) state.weekLabels1 = {};
+            if (!state.weekLabels2) state.weekLabels2 = {};
+        } catch (e) {
+            console.error('로컬 데이터 파싱 오류:', e);
+        }
+    } else {
+        state.periodCount = state.periodCount || 7;
+        state.annualHours = state.annualHours || {};
+        state.weeklyData1 = state.weeklyData1 || {};
+        state.weeklyData2 = state.weeklyData2 || {};
+        state.weekLabels1 = state.weekLabels1 || {};
+        state.weekLabels2 = state.weekLabels2 || {};
+    }
+    ensureWeekLabelsExist();
+    const subSelect = document.getElementById('newSubName');
+    if (subSelect) {
+        subSelect.innerHTML = '';
+        allSubjects.forEach(s => subSelect.add(new Option(s, s)));
+    }
+    currentWeekIndex = 0;
+    loadWeekDataFromStorage(0);
+    updateWeekDropdown();
+    updateWeekDisplay();
+    refreshLastServerSaveDisplay();
+    renderAll();
+}
+
+// 서버에서 데이터 불러오기 (버튼 클릭 시에만 호출, 불러온 뒤 로컬에도 반영)
 function loadDataFromServer() {
     const loginInfo = JSON.parse(localStorage.getItem('timetable_login'));
     const nickname = loginInfo.nickname;
-    
-    // 연간시수표 데이터는 로컬에만 저장되므로 보호
-    const preservedAnnualTableData = state.annualTableData;
     
     fetch(`${window.location.origin}/api/data?nickname=${encodeURIComponent(nickname)}`)
         .then(response => response.json())
         .then(result => {
             if (result.success && result.data) {
                 const parsed = result.data;
-                
-                // 서버에 저장된 연간시수표 데이터가 있으면 제거 (안전장치)
                 delete parsed.annualTableData;
                 delete parsed.annualTableData1;
                 delete parsed.annualTableData2;
-                
                 Object.assign(state, parsed);
-                
-                // annualTableData는 항상 보호 (로컬에만 저장되므로)
-                state.annualTableData = preservedAnnualTableData;
-                
                 if (parsed.currentWeek) state.currentWeek = new Date(parsed.currentWeek);
-                // periodCount가 없으면 기본값 7 설정
                 if (!state.periodCount) state.periodCount = 7;
-                // annualHours가 없으면 빈 객체 설정
                 if (!state.annualHours) state.annualHours = {};
-                // weeklyData1, weeklyData2가 없으면 빈 객체 설정
                 if (!state.weeklyData1) state.weeklyData1 = {};
                 if (!state.weeklyData2) state.weeklyData2 = {};
             } else {
-                // 초기 상태 설정 (annualTableData는 보호)
                 state.periodCount = 7;
                 state.annualHours = {};
                 state.weeklyData1 = {};
                 state.weeklyData2 = {};
-                state.annualTableData = preservedAnnualTableData;
             }
             
-            // 과목 선택 드롭다운 채우기
             const subSelect = document.getElementById('newSubName');
-            allSubjects.forEach(s => subSelect.add(new Option(s, s)));
-            
+            if (subSelect) {
+                subSelect.innerHTML = '';
+                allSubjects.forEach(s => subSelect.add(new Option(s, s)));
+            }
+            if (!state.weekLabels1) state.weekLabels1 = {};
+            if (!state.weekLabels2) state.weekLabels2 = {};
+            ensureWeekLabelsExist();
+            currentWeekIndex = 0;
+            loadWeekDataFromStorage(0);
+            updateWeekDropdown();
             updateWeekDisplay();
             renderAll();
-            
-            // 연간시수표 데이터 불러오기
-            loadAnnualDataOnInit();
+            saveToLocalStorage();
         })
         .catch(error => {
             console.error('데이터 불러오기 오류:', error);
             alert('서버에서 데이터를 불러오는 중 오류가 발생했습니다.');
-            // 초기 상태로 진행 (annualTableData는 보호)
             state.periodCount = 7;
             state.annualHours = {};
             state.weeklyData1 = {};
             state.weeklyData2 = {};
-            state.annualTableData = preservedAnnualTableData;
-            
+            state.weekLabels1 = state.weekLabels1 || {};
+            state.weekLabels2 = state.weekLabels2 || {};
+            ensureWeekLabelsExist();
             const subSelect = document.getElementById('newSubName');
-            allSubjects.forEach(s => subSelect.add(new Option(s, s)));
-            
+            if (subSelect) {
+                subSelect.innerHTML = '';
+                allSubjects.forEach(s => subSelect.add(new Option(s, s)));
+            }
+            currentWeekIndex = 0;
+            loadWeekDataFromStorage(0);
+            updateWeekDropdown();
             updateWeekDisplay();
             renderAll();
-            
-            // 에러 발생 시에도 연간시수표 데이터는 불러오기 시도
-            loadAnnualDataOnInit();
         });
-}
-
-// 초기화 시 1학기 1주 자동 로드 (읽기 전용)
-// 주의: 이 페이지에서는 연간시수표 데이터를 로드만 할 수 있습니다.
-// 저장 및 덮어쓰기는 annual.html 페이지에서만 가능합니다.
-function loadAnnualDataOnInit() {
-    const semester = currentSemester; // 현재 선택된 학기 사용
-    const loginInfoStr = localStorage.getItem('timetable_login');
-    
-    if (!loginInfoStr) {
-        console.log('[메인페이지] 로그인 정보 없음');
-        return;
-    }
-    
-    let loginInfo;
-    try {
-        loginInfo = JSON.parse(loginInfoStr);
-    } catch (e) {
-        console.error('[메인페이지] 로그인 정보 파싱 오류:', e);
-        return;
-    }
-    
-    const nickname = loginInfo.nickname;
-    if (!nickname) {
-        return;
-    }
-    
-    // localStorage에서 불러오기
-    const storageKey = `annual_data_${nickname}_semester${semester}`;
-    const storedData = localStorage.getItem(storageKey);
-    
-    if (!storedData) {
-        const weekContainer = document.getElementById('weekSelectorContainer');
-        if (weekContainer) {
-            weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
-            weekContainer.style.display = 'flex';
-        }
-        return;
-    }
-    
-    try {
-        const data = JSON.parse(storedData);
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            const weekContainer = document.getElementById('weekSelectorContainer');
-            if (weekContainer) {
-                weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
-                weekContainer.style.display = 'flex';
-            }
-            return;
-        }
-        
-        // 데이터가 있으면 반드시 state에 저장
-        if (data && Array.isArray(data) && data.length > 0) {
-            state.annualTableData = data;
-            
-            // 주 선택 컨테이너 표시
-            const weekContainer = document.getElementById('weekSelectorContainer');
-            
-            // 첫 번째 주로 초기화
-            currentWeekIndex = 0;
-            
-            // 첫 번째 주의 데이터 불러오기
-            loadWeekDataFromStorage(currentWeekIndex);
-            
-            // 화면 업데이트
-            updateAnnualWeekDisplay();
-            updateWeekPeriodInfo();
-            renderAll();
-            
-            // 목표시수 데이터 불러오기
-            loadWeekData();
-            
-            if (weekContainer) {
-                weekContainer.style.display = 'flex';
-            }
-        } else {
-            // 데이터가 없으면 state.annualTableData를 null로 설정
-            state.annualTableData = null;
-            const weekContainer = document.getElementById('weekSelectorContainer');
-            if (weekContainer) {
-                weekContainer.innerHTML = '<span style="color: #dc3545; font-weight: bold;">연간시수표를 먼저 입력 해주세요.</span>';
-                weekContainer.style.display = 'flex';
-            }
-        }
-    } catch (error) {
-            console.error('[메인페이지] 초기 데이터 로드 실패:', error);
-            console.error('[메인페이지] 오류 상세:', error.stack);
-            // 에러 발생 시에도 state.annualTableData를 명확히 설정
-            state.annualTableData = null;
-        }
 }
 
 function logout() {
@@ -704,36 +837,8 @@ function updateWeekDisplay() {
     const weekStartDate = weekStart.getDate();
     
     document.getElementById('weekDisplay').innerHTML = 
-        `${month}월 ${weekStartDate}일 주 (${weekNumber}주차) - 1학기`;
+        `${month}월 ${weekStartDate}일 주 - 1학기`;
 }
-
-// 주와 기간 정보 업데이트
-function updateWeekPeriodInfo() {
-    const weekPeriodInfo = document.getElementById('weekPeriodInfo');
-    if (!weekPeriodInfo) return;
-    
-    if (!state.annualTableData || state.annualTableData.length === 0) {
-        console.log('[메인페이지] updateWeekPeriodInfo - 연간시수표 데이터 없음');
-        weekPeriodInfo.textContent = '';
-        return;
-    }
-    
-    if (currentWeekIndex >= 0 && currentWeekIndex < state.annualTableData.length) {
-        const weekData = state.annualTableData[currentWeekIndex];
-        if (weekData) {
-            const week = weekData['주'] || `${currentWeekIndex + 1}주`;
-            const period = weekData['기간'] || '';
-            weekPeriodInfo.textContent = `(${week}${period ? `, 기간: ${period}` : ''})`;
-            console.log(`[메인페이지] 주/기간 정보 업데이트: ${week}${period ? `, 기간: ${period}` : ''}`);
-        } else {
-            weekPeriodInfo.textContent = '';
-        }
-    } else {
-        console.log(`[메인페이지] updateWeekPeriodInfo - 유효하지 않은 주 인덱스: ${currentWeekIndex}`);
-        weekPeriodInfo.textContent = '';
-    }
-}
-
 
 function saveAndRefresh(full = true) {
     // 현재 주의 데이터를 주별 데이터에 저장
@@ -741,25 +846,23 @@ function saveAndRefresh(full = true) {
         saveCurrentWeekData();
     }
     
-    // 서버에 데이터 저장
-    saveDataToServer();
+    // 로컬에만 저장 (서버 반영은 '서버에 저장' 버튼 클릭 시에만)
+    saveToLocalStorage();
     
     if (full) { renderMasterSheets(); renderClassGrid(); renderUnifiedMemo(); }
 }
 
-// 서버에 데이터 저장
+// 서버에 데이터 저장 (성공 시 result.success === true인 Promise 반환)
 function saveDataToServer() {
     const loginInfo = localStorage.getItem('timetable_login');
-    if (!loginInfo) return;
+    if (!loginInfo) return Promise.resolve({ success: false });
     
     const login = JSON.parse(loginInfo);
     const nickname = login.nickname;
     
-    // annualTableData는 별도 API에서 관리하므로 저장 시 제외
     const stateToSave = { ...state };
-    delete stateToSave.annualTableData;
     
-    fetch(`${window.location.origin}/api/data`, {
+    return fetch(`${window.location.origin}/api/data`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -774,9 +877,11 @@ function saveDataToServer() {
         if (!result.success) {
             console.error('데이터 저장 실패:', result.message);
         }
+        return result;
     })
     .catch(error => {
         console.error('데이터 저장 오류:', error);
+        return { success: false };
     });
 }
 
@@ -837,10 +942,54 @@ function loadWeekDataFromStorage(weekIndex) {
     }
 }
 
-// 서버에 저장
+// 마지막 서버 저장 일시를 localStorage에 저장하고 화면에 표시
+function setLastServerSaveTime(displayText) {
+    const el = document.getElementById('lastServerSaveTime');
+    if (el) el.textContent = displayText;
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (loginInfo) {
+        try {
+            const login = JSON.parse(loginInfo);
+            if (login.nickname) localStorage.setItem('timetable_lastServerSave_' + login.nickname, displayText);
+        } catch (e) {}
+    }
+}
+
+// 저장된 마지막 서버 저장 일시를 화면에 복원 (페이지 로드·재접속 시 사용)
+function refreshLastServerSaveDisplay() {
+    const loginInfo = localStorage.getItem('timetable_login');
+    if (!loginInfo) return;
+    try {
+        const login = JSON.parse(loginInfo);
+        const nickname = login.nickname;
+        if (!nickname) return;
+        const saved = localStorage.getItem('timetable_lastServerSave_' + nickname);
+        const el = document.getElementById('lastServerSaveTime');
+        if (el && saved) el.textContent = saved;
+    } catch (e) {}
+}
+
+// 서버에 저장 (로컬 상태를 서버로 업로드)
 function saveToServer() {
-    saveDataToServer();
-    alert('서버에 저장되었습니다.');
+    if (!confirm('서버에 저장하시겠습니까?\n기존 서버에 있는 자료는 현재 화면 내용으로 덮어씌워집니다.')) return;
+    if (currentWeekIndex >= 0) saveCurrentWeekData();
+    saveToLocalStorage();
+    saveDataToServer().then(function(result) {
+        if (result && result.success) {
+            const now = new Date();
+            const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+            const displayText = '마지막 저장: ' + dateStr + ' ' + timeStr;
+            setLastServerSaveTime(displayText);
+        }
+        alert('서버에 저장되었습니다.');
+    });
+}
+
+// 서버에서 불러오기 (서버 데이터로 로컬 덮어쓰기)
+function loadFromServer() {
+    if (!confirm('서버에 저장된 데이터로 덮어쓰시겠습니까?\n현재 로컬에만 있는 수정 내용은 사라질 수 있습니다.')) return;
+    loadDataFromServer();
 }
 
 // 파일 불러오기
@@ -1062,7 +1211,7 @@ function renderMasterSheets() {
         div.className = 'master-sheet';
         const titleCls = getSubjectClass(sheet.subName);
         const tagDisplay = sheet.tag ? ` <span style="color: #666; font-size: 12px;">${sheet.tag}</span>` : '';
-        let html = `<h3><span class="${titleCls}">[${sheet.subName}]</span>${tagDisplay} 고정 시간표 <button class="btn" style="background: #6c757d; font-size: 11px; padding: 3px 8px;" onclick="showGlobalCopyDialog(${sIdx})">복사</button> <button class="btn btn-del" onclick="deleteSheet(${sIdx})">삭제</button></h3>`;
+        let html = `<h3><span class="${titleCls}">[${sheet.subName}]</span>${tagDisplay} 고정 시간표 <button class="btn btn-del" onclick="deleteSheet(${sIdx})">삭제</button></h3>`;
         html += `<table><thead><tr><th>교시</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
         
         for (let r = 0; r < state.periodCount; r++) {
@@ -1443,10 +1592,10 @@ function handleMasterDrop(e, sIdx, r, c) {
     const sourceKey = `${source.r}-${source.c}`;
     const targetKey = `${r}-${c}`;
     
-    // rules 교환
     const sourceRules = state.subjectSheets[sIdx].rules[sourceKey] || [];
     const targetRules = state.subjectSheets[sIdx].rules[targetKey] || [];
     
+    // rules 교환
     state.subjectSheets[sIdx].rules[sourceKey] = [...targetRules];
     state.subjectSheets[sIdx].rules[targetKey] = [...sourceRules];
     
@@ -1457,6 +1606,18 @@ function handleMasterDrop(e, sIdx, r, c) {
     if (state.subjectSheets[sIdx].rules[targetKey].length === 0) {
         delete state.subjectSheets[sIdx].rules[targetKey];
     }
+    
+    // 옮겨진 자리(빈 자리)가 되면 학급별 시간표에서 해당 셀 공란 처리
+    sourceRules.forEach(classNum => {
+        if (state.classData[classNum]) {
+            state.classData[classNum].timetable[source.r][source.c] = '';
+        }
+    });
+    targetRules.forEach(classNum => {
+        if (state.classData[classNum]) {
+            state.classData[classNum].timetable[r][c] = '';
+        }
+    });
     
     saveAndRefresh();
 }
@@ -1601,9 +1762,8 @@ function autoFill(num) {
 
 function renderAll() { 
     renderMasterSheets(); 
-    renderClassGrid(); 
+    renderClassGrid();
     renderUnifiedHoursTable();
-    updateWeekPeriodInfo();
 }
 
 // 통합 주간 시수 및 달성도 표 렌더링
@@ -1721,190 +1881,8 @@ function updateTargetHoursSum() {
     }
 }
 
-// 연간시수표 데이터 선택 함수 (읽기 전용)
-// 주의: 이 페이지에서는 연간시수표 데이터를 로드만 할 수 있습니다.
-// 저장 및 덮어쓰기는 annual.html 페이지에서만 가능합니다.
-function loadAnnualData() {
-    const semester = currentSemester; // 현재 선택된 학기 사용
-    const loginInfoStr = localStorage.getItem('timetable_login');
-    
-    if (!loginInfoStr) {
-        alert('로그인이 필요합니다.');
-        window.location.href = 'login.html';
-        return;
-    }
-    
-    let loginInfo;
-    try {
-        loginInfo = JSON.parse(loginInfoStr);
-    } catch (e) {
-        alert('로그인 정보를 불러올 수 없습니다.');
-        window.location.href = 'login.html';
-        return;
-    }
-    
-    const nickname = loginInfo.nickname;
-    if (!nickname) {
-        alert('로그인 정보가 올바르지 않습니다.');
-        window.location.href = 'login.html';
-        return;
-    }
-    
-    // localStorage에서 불러오기
-    const storageKey = `annual_data_${nickname}_semester${semester}`;
-    const storedData = localStorage.getItem(storageKey);
-    
-    if (!storedData) {
-        alert('연간시수표 데이터를 찾을 수 없습니다.');
-        return;
-    }
-    
-    try {
-        const data = JSON.parse(storedData);
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            alert('연간시수표 데이터가 비어있습니다.');
-            return;
-        }
-        
-        state.annualTableData = data;
-        
-        // 주 선택 컨테이너 표시
-        const weekContainer = document.getElementById('weekSelectorContainer');
-        
-        // 첫 번째 주로 초기화
-        currentWeekIndex = 0;
-        
-        // 첫 번째 주의 데이터 불러오기
-        loadWeekDataFromStorage(currentWeekIndex);
-        
-        // 화면 업데이트
-        updateAnnualWeekDisplay();
-        renderAll();
-        
-        // 목표시수 데이터 불러오기
-        loadWeekData();
-        
-        if (weekContainer) {
-            weekContainer.style.display = 'flex';
-        }
-        alert(`${semester}학기 데이터가 성공적으로 선택되었습니다.`);
-    } catch (error) {
-        alert(`오류: ${error.message}`);
-        console.error('연간시수표 로드 오류:', error);
-    }
-}
-
-// 현재 선택된 주 인덱스
-let currentWeekIndex = -1;
-
-// 주 변경 함수 (화살표 버튼용)
-function changeWeek(direction) {
-    if (!state.annualTableData || state.annualTableData.length === 0) return;
-    
-    const newIndex = currentWeekIndex + direction;
-    
-    // 범위 체크
-    if (newIndex < 0 || newIndex >= state.annualTableData.length) return;
-    
-    // 현재 주의 데이터 저장
-    if (currentWeekIndex >= 0) {
-        saveCurrentWeekData();
-    }
-    
-    // 새 주로 변경
-    currentWeekIndex = newIndex;
-    
-    // 새 주의 데이터 불러오기
-    loadWeekDataFromStorage(currentWeekIndex);
-    
-    // 화면 업데이트
-    updateAnnualWeekDisplay();
-    renderAll();
-    
-    // 목표시수 데이터 불러오기
-    loadWeekData();
-}
-
-// 연간시수표 주 표시 업데이트
-function updateAnnualWeekDisplay() {
-    const annualWeekDisplay = document.getElementById('annualWeekDisplay');
-    if (!annualWeekDisplay) return;
-    
-    if (!state.annualTableData || state.annualTableData.length === 0) {
-        console.log('[메인페이지] updateAnnualWeekDisplay - 연간시수표 데이터 없음');
-        annualWeekDisplay.textContent = '';
-        return;
-    }
-    
-    if (currentWeekIndex < 0 || currentWeekIndex >= state.annualTableData.length) {
-        console.log(`[메인페이지] updateAnnualWeekDisplay - 유효하지 않은 주 인덱스: ${currentWeekIndex}`);
-        annualWeekDisplay.textContent = '';
-        return;
-    }
-    
-    // 데이터의 "주" 필드를 그대로 표시 ("1학기 1주", "2학기 1주" 형식)
-    const weekData = state.annualTableData[currentWeekIndex];
-    if (weekData && weekData['주']) {
-        annualWeekDisplay.textContent = weekData['주'];
-    } else {
-        annualWeekDisplay.textContent = `${currentWeekIndex + 1}주`;
-    }
-    console.log(`[메인페이지] 주 표시 업데이트: ${annualWeekDisplay.textContent}`);
-}
-
-// 주 선택 시 해당 주의 데이터 불러오기
-function loadWeekData() {
-    if (currentWeekIndex < 0 || !state.annualTableData) return;
-    
-    const weekData = state.annualTableData[currentWeekIndex];
-    if (!weekData) return;
-    
-    // 기간 표시
-    const periodDisplay = document.getElementById('periodDisplay');
-    if (weekData['기간']) {
-        periodDisplay.textContent = `기간: ${weekData['기간']}`;
-    }
-    
-    // 주와 기간 정보 업데이트
-    updateWeekPeriodInfo();
-    
-    // 과목별 목표시수 매핑 (JSON 필드 -> allSubjects 인덱스)
-    const subjectMapping = {
-        '국어': 0,
-        '사회': 1,
-        '도덕': 2,
-        '수학': 3,
-        '과학': 4,
-        '실과': 5,
-        '체육': 6,
-        '음악': 7,
-        '미술': 8,
-        '영어': 9,
-        '자율': 10,  // 창체(자)
-        '동아리': 11,  // 창체(동)
-        '봉사': 12,   // 창체(봉)
-        '진로': 13    // 창체(진)
-    };
-    
-    // 목표시수 업데이트
-    Object.keys(subjectMapping).forEach(subjectKey => {
-        const idx = subjectMapping[subjectKey];
-        const value = parseInt(weekData[subjectKey]) || 0;
-        
-        // 모든 반의 목표시수 업데이트
-        for (let i = 1; i <= state.classCount; i++) {
-            if (state.classData[i]) {
-                state.classData[i].targetHours[idx] = value;
-            }
-        }
-    });
-    
-    // 통합 표 다시 렌더링하여 목표시수 반영
-    renderUnifiedHoursTable();
-    
-    // localStorage에 저장
-    saveAndRefresh(false);
-}
+// 현재 선택된 주 인덱스 (학기별 1개 뷰만 사용, 항상 0)
+let currentWeekIndex = 0;
 
 // 학급 시간표 삭제 함수
 function clearClassTimetable(classNum) {
@@ -1945,180 +1923,6 @@ function clearClassTimetable(classNum) {
         grid.replaceChild(newCard, card);
     }
 }
-// 복사 다이얼로그 표시
-function showGlobalCopyDialog(sheetIdx) {
-    if (!state.annualTableData || state.annualTableData.length === 0) {
-        alert('연간시수표 데이터를 먼저 로드해주세요.');
-        return;
-    }
-    
-    const maxWeek = state.annualTableData.length;
-    const targetWeek = prompt(`복사할 주를 입력하세요 (1~${maxWeek}):`, String(currentWeekIndex + 1));
-    if (!targetWeek) return;
-    
-    const targetWeekIdx = parseInt(targetWeek) - 1; // 인덱스로 변환
-    
-    if (isNaN(targetWeekIdx) || targetWeekIdx < 0 || targetWeekIdx >= maxWeek) {
-        alert('올바른 주를 입력해주세요.');
-        return;
-    }
-    
-    if (targetWeekIdx === currentWeekIndex) {
-        alert('현재 주와 동일합니다. 다른 주를 선택해주세요.');
-        return;
-    }
-    
-    if (confirm(`현재 주의 고정 시간표를 ${targetWeek}주로 복사하시겠습니까?`)) {
-        copySheetToWeek(sheetIdx, targetWeekIdx);
-    }
-}
-
-// 고정 시간표를 특정 주에 복사
-function copySheetToWeek(sheetIdx, targetWeekIdx) {
-    const sheet = state.subjectSheets[sheetIdx];
-    if (!sheet) return;
-    
-    // 현재 주의 데이터를 주별 데이터에 저장
-    if (currentWeekIndex >= 0) {
-        saveCurrentWeekData();
-    }
-    
-    // 현재 학기에 맞는 weeklyData 사용
-    const weeklyData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
-    if (!weeklyData) {
-        if (currentSemester === '1') {
-            state.weeklyData1 = {};
-        } else {
-            state.weeklyData2 = {};
-        }
-    }
-    const targetWeeklyData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
-    
-    // 대상 주에 복사
-    if (!targetWeeklyData[targetWeekIdx]) {
-        targetWeeklyData[targetWeekIdx] = {
-            subjectSheets: [],
-            classData: {}
-        };
-    }
-    
-    // 해당 주의 subjectSheets 배열에서 같은 과목과 태그 찾기
-    const weekSheets = targetWeeklyData[targetWeekIdx].subjectSheets;
-    const sheetTag = sheet.tag || '';
-    const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName && (s.tag || '') === sheetTag);
-    
-    // 복사할 데이터 준비
-    const copiedSheet = {
-        subName: sheet.subName,
-        tag: sheet.tag || '',
-        memo: sheet.memo,
-        rules: JSON.parse(JSON.stringify(sheet.rules))
-    };
-    
-    if (existingIdx >= 0) {
-        // 기존 시트 교체 (과목명과 태그가 모두 같은 경우)
-        weekSheets[existingIdx] = copiedSheet;
-    } else {
-        // 새 시트 추가 (과목명이 다르거나 태그가 다른 경우)
-        weekSheets.push(copiedSheet);
-    }
-    
-    // 서버에 저장
-    saveDataToServer();
-    
-    alert(`${targetWeekIdx + 1}주로 복사가 완료되었습니다.`);
-}
-
-// 모든 고정시간표 복사 다이얼로그 표시
-function copyAllFixedTimetables() {
-    if (!state.annualTableData || state.annualTableData.length === 0) {
-        alert('연간시수표 데이터를 먼저 로드해주세요.');
-        return;
-    }
-    
-    if (state.subjectSheets.length === 0) {
-        alert('복사할 고정시간표가 없습니다.');
-        return;
-    }
-    
-    const maxWeek = state.annualTableData.length;
-    const startWeek = prompt(`복사할 시작 주를 입력하세요 (1~${maxWeek}):`, '1');
-    if (!startWeek) return;
-    
-    const endWeek = prompt(`복사할 끝 주를 입력하세요 (${startWeek}~${maxWeek}):`, String(maxWeek));
-    if (!endWeek) return;
-    
-    const start = parseInt(startWeek) - 1; // 인덱스로 변환
-    const end = parseInt(endWeek) - 1;
-    
-    if (isNaN(start) || isNaN(end) || start < 0 || end >= maxWeek || start > end) {
-        alert('올바른 주 범위를 입력해주세요.');
-        return;
-    }
-    
-    if (confirm(`현재 주의 모든 고정시간표를 ${startWeek}주부터 ${endWeek}주까지 복사하시겠습니까?`)) {
-        copyAllSheetsToWeeks(start, end);
-    }
-}
-
-// 모든 고정시간표를 여러 주에 복사
-function copyAllSheetsToWeeks(startWeekIdx, endWeekIdx) {
-    // 현재 주의 데이터를 주별 데이터에 저장
-    if (currentWeekIndex >= 0) {
-        saveCurrentWeekData();
-    }
-    
-    // 각 주에 모든 시트 복사
-    // 현재 학기에 맞는 weeklyData 사용
-    const weeklyData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
-    if (!weeklyData) {
-        if (currentSemester === '1') {
-            state.weeklyData1 = {};
-        } else {
-            state.weeklyData2 = {};
-        }
-    }
-    const targetWeeklyData = currentSemester === '1' ? state.weeklyData1 : state.weeklyData2;
-    
-    for (let weekIdx = startWeekIdx; weekIdx <= endWeekIdx; weekIdx++) {
-        if (!targetWeeklyData[weekIdx]) {
-            targetWeeklyData[weekIdx] = {
-                subjectSheets: [],
-                classData: {}
-            };
-        }
-        
-        const weekSheets = targetWeeklyData[weekIdx].subjectSheets;
-        
-        // 모든 시트 복사
-        state.subjectSheets.forEach(sheet => {
-            const sheetTag = sheet.tag || '';
-            const existingIdx = weekSheets.findIndex(s => s.subName === sheet.subName && (s.tag || '') === sheetTag);
-            
-            // 복사할 데이터 준비
-            const copiedSheet = {
-                subName: sheet.subName,
-                tag: sheet.tag || '',
-                memo: sheet.memo,
-                rules: JSON.parse(JSON.stringify(sheet.rules))
-            };
-            
-            if (existingIdx >= 0) {
-                // 기존 시트 교체 (과목명과 태그가 모두 같은 경우)
-                weekSheets[existingIdx] = copiedSheet;
-            } else {
-                // 새 시트 추가 (과목명이 다르거나 태그가 다른 경우)
-                weekSheets.push(copiedSheet);
-            }
-        });
-    }
-    
-    // 서버에 저장
-    saveDataToServer();
-    
-    alert(`${startWeekIdx + 1}주부터 ${endWeekIdx + 1}주까지 모든 고정시간표 복사가 완료되었습니다.`);
-}
-
 // 요일 비활성화 버튼: 요일 열 비활성화/활성화 토글 함수 (현재 주에만 적용)
 function toggleDayColumn(dayIndex) {
     if (currentWeekIndex < 0) return; // 주가 선택되지 않은 경우
