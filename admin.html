@@ -571,17 +571,9 @@ function exportAllData() {
             // 서버 데이터
             const serverData = result.data;
             
-            // localStorage에서 연간시수표 데이터 가져오기
-            const annualData1Key = `annual_data_${nickname}_semester1`;
-            const annualData2Key = `annual_data_${nickname}_semester2`;
-            const annualData1 = localStorage.getItem(annualData1Key);
-            const annualData2 = localStorage.getItem(annualData2Key);
-            
-            // 백업 데이터 구성 (연간시수표 데이터 포함)
+            // 백업 데이터 구성
             const backupData = {
                 ...serverData,
-                annualTableData1: annualData1 ? JSON.parse(annualData1) : [],
-                annualTableData2: annualData2 ? JSON.parse(annualData2) : [],
                 backupDate: new Date().toISOString(),
                 backupInfo: {
                     nickname: nickname,
@@ -601,7 +593,7 @@ function exportAllData() {
             link.download = `시간표_백업_${nickname}_${new Date().toISOString().split('T')[0]}.json`;
             link.click();
             URL.revokeObjectURL(url);
-            alert('백업 파일이 다운로드되었습니다.\n(연간시수표 데이터 포함)');
+            alert('백업 파일이 다운로드되었습니다.');
         })
         .catch(error => {
             console.error('백업 오류:', error);
@@ -631,14 +623,7 @@ function importBackup(event) {
             
             const nickname = loginInfo.nickname;
             
-            // 연간시수표 데이터 분리
-            const annualTableData1 = backupData.annualTableData1 || [];
-            const annualTableData2 = backupData.annualTableData2 || [];
-            
-            // 서버 데이터 (연간시수표 제외)
             const serverData = { ...backupData };
-            delete serverData.annualTableData1;
-            delete serverData.annualTableData2;
             delete serverData.backupDate;
             delete serverData.backupInfo;
             
@@ -656,18 +641,7 @@ function importBackup(event) {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    // 연간시수표 데이터를 localStorage에 저장
-                    const annualData1Key = `annual_data_${nickname}_semester1`;
-                    const annualData2Key = `annual_data_${nickname}_semester2`;
-                    
-                    if (annualTableData1 && annualTableData1.length > 0) {
-                        localStorage.setItem(annualData1Key, JSON.stringify(annualTableData1));
-                    }
-                    if (annualTableData2 && annualTableData2.length > 0) {
-                        localStorage.setItem(annualData2Key, JSON.stringify(annualTableData2));
-                    }
-                    
-                    alert('백업 파일을 성공적으로 불러왔습니다.\n(연간시수표 데이터 포함)');
+                    alert('백업 파일을 성공적으로 불러왔습니다.');
                     init();
                 } else {
                     alert('백업 파일 업로드 중 오류가 발생했습니다: ' + (result.message || '알 수 없는 오류'));
