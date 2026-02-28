@@ -337,13 +337,11 @@ function init() {
     // 로컬에 저장된 데이터만 불러오기
     loadDataFromLocal();
     
-    // 서버에서 불러오기 버튼으로 들어온 경우 플래그 제거
+    // 서버에서 불러오기 버튼을 눌렀을 때만: 새로고침 후 서버에서 불러오기 진행
     if (localStorage.getItem('main_doLoadFromServer') === '1') {
         localStorage.removeItem('main_doLoadFromServer');
+        loadDataFromServer();
     }
-    
-    // 로그인 후 페이지를 열었을 때 서버에서 자동 불러오기 (한 번)
-    loadDataFromServer();
 }
 
 // 학기 전환 함수
